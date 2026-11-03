@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Each session is a court sheet: one lane per court on a shared time axis.
+   The dashed "chalk" box marks the published session; green blocks are bookings. */
+:root {
+  --bg: #f2f5f1; --surface: #ffffff; --ink: #15221b; --muted: #5a6a61; --line: #d4ddd5;
+  --lane: #e9eee9; --window: #f8fbf8;
+  --court: #1d6a4c; --court-ink: #ffffff; --court-soft: #e0eee6; --ball: #c6d936; --ball-ink: #1d2408;
+  --warn: #9a4b12; --warn-soft: #fbeee2; --scrim: rgba(12, 20, 16, .45);
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1612; --surface: #15201a; --ink: #e4ede7; --muted: #92a399; --line: #2c3c33;
+    --lane: #101914; --window: #1a2720;
+    --court: #5cbd90; --court-ink: #0b1510; --court-soft: #1b3228; --ball: #b8cb2c; --ball-ink: #1d2408;
+    --warn: #f0a868; --warn-soft: #33241a; --scrim: rgba(0, 0, 0, .6); color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 18px; }
+.stack { display: grid; gap: 14px; }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--court); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 2.1rem; line-height: 1; margin: 0; letter-spacing: .01em; }
+h1 span { color: var(--court); }
+.sub { color: var(--muted); margin: 4px 0 0; font-size: .92rem; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: none; padding: 7px 14px; border-radius: 7px; font-weight: 600; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--court); color: var(--court-ink); }
+
+.status { font-size: .88rem; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
+
+.weeknav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.weeknav .label { font-family: var(--display); font-weight: 600; font-size: 1.35rem; letter-spacing: .02em; }
+.weeknav .tally { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.weeknav .spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 500; }
+.btn:hover:not(:disabled) { border-color: var(--court); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--court); border-color: var(--court); color: var(--court-ink); font-weight: 600; }
+.btn.danger { color: var(--warn); }
+.btn.icon { padding: 6px 10px; min-width: 38px; }
+
+/* Session card */
+.session { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 16px; display: grid; gap: 12px; min-width: 0; }
+.session.past { opacity: .62; }
+.session-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.session-head h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.5rem; line-height: 1.1; }
+.session-head .time { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
+.session-head .count { margin-left: auto; font-variant-numeric: tabular-nums; font-size: .9rem; display: flex; gap: 10px; flex-wrap: wrap; }
+.session-head .count b { font-weight: 600; }
+.key { display: inline-flex; align-items: center; gap: 5px; }
+.key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.key .k-full { background: var(--court); }
+.key .k-part { background: var(--ball); }
+.key .k-free { border: 1.5px dashed var(--muted); }
+.chip { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--court-soft); color: var(--court); }
+.chip.plain { background: none; border: 1px solid var(--line); color: var(--muted); }
+
+/* Court lanes */
+.board { display: grid; gap: 5px; }
+.row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px; gap: 8px; align-items: center; }
+.axis { height: 16px; position: relative; font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.axis span.first { transform: none; }
+.axis span.last { transform: translateX(-100%); }
+.num {
+  height: 30px; border-radius: 7px; display: grid; place-items: center;
+  font-family: var(--display); font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums;
+  border: 1.5px dashed var(--line); color: var(--muted);
+}
+.num.full { background: var(--court); border-color: var(--court); color: var(--court-ink); }
+.num.part { background: var(--ball); border-color: var(--ball); color: var(--ball-ink); }
+.lane { position: relative; height: 30px; border-radius: 6px; background: var(--lane); cursor: copy; overflow: hidden; }
+.lane.locked { cursor: not-allowed; }
+.win { position: absolute; top: 0; bottom: 0; background: var(--window); border: 1.5px dashed var(--line); border-radius: 6px; pointer-events: none; }
+.blk {
+  position: absolute; top: 3px; bottom: 3px; border: 0; border-radius: 5px; padding: 0 7px;
+  background: var(--court); color: var(--court-ink); font-size: .8rem; font-weight: 600; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.blk small { font-weight: 500; opacity: .85; font-variant-numeric: tabular-nums; }
+.blk:hover { filter: brightness(1.08); }
+.add { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); font-size: 1.1rem; line-height: 1; color: var(--court); padding: 0; }
+.add:hover:not(:disabled) { border-color: var(--court); }
+.add:disabled { opacity: .35; cursor: not-allowed; }
+.lockednote { font-size: .85rem; color: var(--muted); }
+
+/* Bookers */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
+.panel h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.5rem; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.addrow input { flex: 1 1 200px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.people { list-style: none; margin: 0; padding: 0; display: grid; }
+.people li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.people li:first-child { border-top: 0; }
+.people .name { font-weight: 600; flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.people .stat { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+.people .confirm { font-size: .88rem; color: var(--warn); }
+.empty { color: var(--muted); margin: 0; }
+.linklike { border: 0; background: none; padding: 0; color: var(--court); font-weight: 600; text-decoration: underline; }
+
+/* Booking form */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 20; display: grid; align-items: end; justify-items: center; }
+@media (min-width: 640px) { .scrim { align-items: center; } }
+.sheet {
+  width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; background: var(--surface);
+  border-radius: 14px 14px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 14px;
+}
+@media (min-width: 640px) { .sheet { border-radius: 14px; } }
+.sheet h3 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.6rem; line-height: 1.1; }
+.sheet .when { color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.field { display: grid; gap: 7px; }
+.flabel { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker label { position: relative; }
+.picker input { position: absolute; opacity: 0; pointer-events: none; }
+.picker span { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
+.picker input:checked + span { background: var(--court); border-color: var(--court); color: var(--court-ink); }
+.picker input:focus-visible + span { outline: 2px solid var(--court); outline-offset: 2px; }
+.timerow { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.result { font-variant-numeric: tabular-nums; font-weight: 600; }
+.result .note { font-weight: 400; color: var(--muted); }
+.result.bad { color: var(--warn); }
+.others { margin: 0; padding: 0; list-style: none; font-size: .88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions .spacer { flex: 1; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 500; z-index: 30; max-width: calc(100% - 32px); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Breakfast <span>Tennis</span></h1>
+      <p class="sub" id="subtitle">Court bookings</p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="tab-sessions" role="tab" aria-selected="true" data-tab="sessions">Sessions</button>
+      <button id="tab-bookers" role="tab" aria-selected="false" data-tab="bookers">Bookers</button>
+    </div>
+  </header>
+
+  <div id="status" class="status">Loading bookings…</div>
+
+  <section id="view-sessions" class="stack">
+    <div class="weeknav">
+      <button class="btn icon" id="prev" aria-label="Previous week">‹</button>
+      <button class="btn icon" id="next" aria-label="Next week">›</button>
+      <span class="label" id="weeklabel">This week</span>
+      <span class="spacer"></span>
+      <span class="tally" id="tally"></span>
+      <button class="btn" id="thisweek">This week</button>
+    </div>
+    <div id="sessions" class="stack"></div>
+  </section>
+
+  <section id="view-bookers" hidden>
+    <div class="panel">
+      <div>
+        <h2>Court bookers</h2>
+        <p class="sub">The admin team members who book courts. Pick from this list when you record a booking.</p>
+      </div>
+      <form class="addrow" id="addform">
+        <input id="newname" placeholder="Name, e.g. Sarah P." autocomplete="off" maxlength="40" aria-label="Booker name">
+        <button class="btn primary" type="submit">Add booker</button>
+      </form>
+      <ul class="people" id="people"></ul>
+    </div>
+  </section>
+</div>
+
+<div id="sheetwrap" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(function () {
+  // Filled from the Settings tab on every load.
+  var CFG = { courts: 0, lengths: [60, 90, 120], step: 30, bookAheadDays: 9 };
+  var SESSIONS = {};   // day number (0 = Sunday) -> {start, end} in minutes
+  var ORDER = [];      // session day numbers, Monday first
+
+  var S = {
+    loaded: false, busy: false, today: null,
+    bookers: [], bookings: [],      // bookings: {id, date, court, start, end, minutes, booker}
+    weekStart: mondayOf(new Date()),
+    tab: "sessions", edit: null, confirmRemove: null
+  };
+
+  // ---------- dates & times ----------
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function mondayOf(d) { var x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return addDays(x, -((x.getDay() + 6) % 7)); }
+  function parse(s) { var p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function short(d) { return DAY[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()]; }
+  function toMin(t) { var p = t.split(":"); return Number(p[0]) * 60 + Number(p[1]); }
+  function hm(m) { return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
+  function sessionDates(ws) { return ORDER.map(function (dow) { return addDays(ws, dow === 0 ? 6 : dow - 1); }); }
+  function todayDate() { return S.today ? parse(S.today) : parse(ymd(new Date())); }
+
+  // ---------- utils ----------
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  var toastTimer;
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 2800); }
+  function setStatus(msg) { var s = $("status"); s.textContent = msg || ""; s.hidden = !msg; }
+  function call(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (res, rej) {
+      var r = google.script.run.withSuccessHandler(res).withFailureHandler(rej);
+      r[fn].apply(r, args);
+    });
+  }
+  function errMsg(e) { return (e && e.message ? e.message : String(e)).replace(/^Exception:\s*/, ""); }
+
+  // Bookings on one court for one date, sorted by start, as minutes.
+  function courtBookings(date, court, exceptId) {
+    return S.bookings.filter(function (b) { return b.date === date && b.court === court && b.id !== exceptId; })
+      .map(function (b) { return { b: b, s: toMin(b.start), e: toMin(b.end) }; })
+      .sort(function (x, y) { return x.s - y.s; });
+  }
+  // How much of the session window a court's bookings cover: "full", "part" or "free".
+  function coverage(list, ws, we) {
+    var t = ws, any = false;
+    list.forEach(function (x) {
+      if (x.e > ws && x.s < we) any = true;
+      if (x.s <= t && x.e > t) t = x.e;
+    });
+    return t >= we ? "full" : any ? "part" : "free";
+  }
+  // First minute from session start that isn't covered, and the next booking start after it.
+  function firstGap(list, ws) {
+    var t = ws;
+    list.forEach(function (x) { if (x.s <= t && x.e > t) t = x.e; });
+    var next = Infinity;
+    list.forEach(function (x) { if (x.s >= t && x.s < next) next = x.s; });
+    return { start: t, next: next };
+  }
+
+  // ---------- data ----------
+  function applyConfig(cfg) {
+    CFG = cfg;
+    SESSIONS = {}; ORDER = [];
+    cfg.sessions.forEach(function (s) { SESSIONS[s.dow] = { start: toMin(s.start), end: toMin(s.end) }; ORDER.push(s.dow); });
+    var groups = [];
+    cfg.sessions.forEach(function (s) {
+      var t = s.start + "–" + s.end, g = groups.filter(function (x) { return x.t === t; })[0];
+      if (g) g.days.push(DAY[s.dow]); else groups.push({ t: t, days: [DAY[s.dow]] });
+    });
+    $("subtitle").textContent = "Court bookings · " + groups.map(function (g) {
+      return g.days.join(g.days.length === 2 ? " & " : ", ") + " " + g.t;
+    }).join(" · ");
+  }
+  function apply(data) {
+    S.today = data.today;
+    applyConfig(data.config);
+    S.bookers = data.bookers;
+    S.bookings = data.bookings;
+    if (!S.loaded) { S.loaded = true; S.weekStart = mondayOf(parse(data.today)); }
+    setStatus("");
+    render();
+  }
+  function load() {
+    return call("getData").then(apply).catch(function (e) {
+      var m = errMsg(e);
+      setStatus(/permission|access|authoriz/i.test(m) && !/Settings|Bookings tab/.test(m)
+        ? "You don't have access to the bookings sheet. Ask the club admin to share the Google Sheet with you as an editor, then reload."
+        : "Couldn't load bookings: " + m);
+    });
+  }
+  function write(fn, arg, okMsg) {
+    S.busy = true;
+    return call(fn, arg).then(function (data) {
+      S.busy = false; apply(data); if (okMsg) toast(okMsg);
+    }).catch(function (e) {
+      S.busy = false; toast(errMsg(e)); load();
+    });
+  }
+
+  // ---------- render: sessions ----------
+  function renderSessions() {
+    if (!S.loaded) { $("tally").textContent = ""; return; }
+    var today = todayDate();
+    var isThisWeek = ymd(S.weekStart) === ymd(mondayOf(today));
+    var end = addDays(S.weekStart, 6);
+    $("weeklabel").textContent = (isThisWeek ? "This week · " : "") + S.weekStart.getDate() + " " + MON[S.weekStart.getMonth()] + " – " + end.getDate() + " " + MON[end.getMonth()];
+    $("thisweek").hidden = isThisWeek;
+
+    var totalFull = 0, totalCourts = 0;
+    $("sessions").innerHTML = sessionDates(S.weekStart).map(function (d) {
+      var date = ymd(d), s = SESSIONS[d.getDay()];
+      var daysOut = Math.round((d - today) / 86400000);
+      var locked = daysOut > CFG.bookAheadDays;
+      var day = S.bookings.filter(function (b) { return b.date === date && b.court <= CFG.courts; });
+
+      // Axis spans the session plus any bookings that start earlier or finish later.
+      var a0 = s.start, a1 = s.end;
+      day.forEach(function (b) { a0 = Math.min(a0, toMin(b.start)); a1 = Math.max(a1, toMin(b.end)); });
+      var span = a1 - a0;
+      function pct(m) { return ((m - a0) / span * 100).toFixed(3) + "%"; }
+
+      var tickStep = span > 210 ? 60 : 30, ticks = [];
+      var first = Math.ceil(a0 / tickStep) * tickStep;
+      for (var t = first; t <= a1; t += tickStep) {
+        var cls = t === a0 ? "first" : t === a1 ? "last" : "";
+        ticks.push('<span class="' + cls + '" style="left:' + pct(t) + '">' + hm(t) + '</span>');
+      }
+
+      var n = { full: 0, part: 0, free: 0 }, rows = [];
+      for (var c = 1; c <= CFG.courts; c++) {
+        var list = courtBookings(date, c);
+        var cov = coverage(list, s.start, s.end);
+        n[cov]++;
+        var blocks = list.map(function (x) {
+          return '<button class="blk" data-id="' + esc(x.b.id) + '" style="left:calc(' + pct(x.s) + ' + 1px);width:calc(' + ((x.e - x.s) / span * 100).toFixed(3) + '% - 2px)"' +
+            ' title="' + esc(x.b.booker) + ' · ' + x.b.start + '–' + x.b.end + '" aria-label="Court ' + c + ', ' + esc(x.b.booker) + ', ' + x.b.start + ' to ' + x.b.end + '">' +
+            esc(x.b.booker) + ' <small>' + x.b.start + '–' + x.b.end + '</small></button>';
+        }).join("");
+        rows.push('<div class="row"><span class="num ' + cov + '" title="' + (cov === "full" ? "Covered" : cov === "part" ? "Partly covered" : "Not booked") + '">' + c + '</span>' +
+          '<div class="lane' + (locked ? ' locked' : '') + '" data-date="' + date + '" data-court="' + c + '" data-a0="' + a0 + '" data-span="' + span + '">' +
+          '<div class="win" style="left:' + pct(s.start) + ';width:' + ((s.end - s.start) / span * 100).toFixed(3) + '%"></div>' + blocks + '</div>' +
+          '<button class="add" data-date="' + date + '" data-court="' + c + '" aria-label="Add a booking on court ' + c + '"' + (locked ? ' disabled' : '') + '>+</button></div>');
+      }
+      totalFull += n.full; totalCourts += CFG.courts;
+
+      var past = Date.now() > new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, Math.max(s.end, a1)).getTime();
+      var chip = "";
+      if (past) chip = '<span class="chip plain">Played</span>';
+      else if (daysOut === 0) chip = '<span class="chip">Today</span>';
+      else if (locked) chip = '<span class="chip plain">Opens ' + short(addDays(d, -CFG.bookAheadDays)) + '</span>';
+      else if (daysOut === CFG.bookAheadDays) chip = '<span class="chip">Opened today</span>';
+
+      return '<article class="session' + (past ? ' past' : '') + '">' +
+        '<div class="session-head"><h2>' + short(d) + '</h2><span class="time">' + hm(s.start) + '–' + hm(s.end) + '</span>' + chip +
+        '<span class="count"><span class="key"><i class="k-full"></i><b>' + n.full + '</b> covered</span>' +
+        '<span class="key"><i class="k-part"></i><b>' + n.part + '</b> partly</span>' +
+        '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span></span></div>' +
+        (locked ? '<div class="lockednote">Bookings for this session open on ' + short(addDays(d, -CFG.bookAheadDays)) + '.</div>' : '') +
+        '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div></article>';
+    }).join("");
+    $("tally").textContent = totalFull + " of " + totalCourts + " courts fully covered";
+  }
+
+  // ---------- render: bookers ----------
+  function renderBookers() {
+    var todayStr = S.today || ymd(new Date());
+    var counts = {};
+    S.bookings.forEach(function (b) { if (b.date >= todayStr) counts[b.booker] = (counts[b.booker] || 0) + 1; });
+    if (!S.bookers.length) {
+      $("people").innerHTML = '<li><p class="empty">' + (S.loaded ? 'No bookers yet. Add the first name above.' : 'Loading…') + '</p></li>';
+      return;
+    }
+    $("people").innerHTML = S.bookers.map(function (name, i) {
+      var n = counts[name] || 0;
+      var right = S.confirmRemove === name
+        ? '<span class="confirm">Remove' + (n ? ' (their ' + n + ' upcoming booking' + (n === 1 ? '' : 's') + ' stay on the board)' : '') + '?</span>' +
+          '<button class="btn danger" data-act="remove-yes" data-i="' + i + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
+        : '<button class="btn danger" data-act="remove" data-i="' + i + '">Remove</button>';
+      return '<li><span class="name">' + esc(name) + '</span><span class="stat">' + n + ' upcoming</span>' + right + '</li>';
+    }).join("");
+  }
+
+  // ---------- booking form ----------
+  // S.edit = {id?, date, court, start (min), minutes, booker}
+  function openNew(date, court, startMin) {
+    var s = SESSIONS[parse(date).getDay()];
+    var list = courtBookings(date, court);
+    var minLen = CFG.lengths[0], len = minLen, start;
+    if (startMin == null) {
+      var g = firstGap(list, s.start);
+      start = g.start;
+      if (start < s.end) {
+        var room = Math.min(g.next, s.end) - start;
+        CFG.lengths.forEach(function (l) { if (l <= room) len = l; });
+      }
+    } else {
+      start = startMin;
+      var next = Infinity;
+      list.forEach(function (x) { if (x.s >= start && x.s < next) next = x.s; });
+      var room2 = Math.min(next, Math.max(s.end, start + minLen)) - start;
+      CFG.lengths.forEach(function (l) { if (l <= room2) len = l; });
+    }
+    S.edit = { id: null, date: date, court: court, start: start, minutes: len, booker: null };
+    renderSheet();
+  }
+  function openExisting(id) {
+    var b = S.bookings.filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, booker: b.booker };
+    renderSheet();
+  }
+  function startOptions(s, current) {
+    var maxLen = CFG.lengths[CFG.lengths.length - 1], opts = {};
+    var lo = Math.ceil((s.start - maxLen + CFG.step) / CFG.step) * CFG.step;
+    for (var t = Math.max(0, lo); t < s.end; t += CFG.step) opts[t] = true;
+    if (current != null) opts[current] = true;
+    return Object.keys(opts).map(Number).sort(function (a, b) { return a - b; });
+  }
+  // Returns an error message for the current form, or "".
+  function problem(ed) {
+    var s = SESSIONS[parse(ed.date).getDay()];
+    var st = ed.start, en = ed.start + ed.minutes;
+    if (en > 24 * 60) return "A booking can't run past midnight.";
+    if (!(st < s.end && en > s.start)) return "This doesn't overlap the " + hm(s.start) + "–" + hm(s.end) + " session.";
+    var clash = courtBookings(ed.date, ed.court, ed.id).filter(function (x) { return x.s < en && st < x.e; })[0];
+    if (clash) return "Clashes with " + clash.b.booker + " " + clash.b.start + "–" + clash.b.end + ".";
+    return "";
+  }
+  function renderResult() {
+    var ed = S.edit, el = $("result"); if (!ed || !el) return;
+    var s = SESSIONS[parse(ed.date).getDay()];
+    var p = problem(ed), en = ed.start + ed.minutes, notes = [];
+    if (ed.start < s.start) notes.push("starts before the session");
+    if (en > s.end) notes.push("runs past the session");
+    el.className = "result" + (p ? " bad" : "");
+    el.innerHTML = p ? esc(p) : hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '');
+    $("save").disabled = !!p;
+  }
+  function renderSheet() {
+    var w = $("sheetwrap");
+    if (!S.edit) { w.hidden = true; w.innerHTML = ""; return; }
+    var ed = S.edit, d = parse(ed.date), s = SESSIONS[d.getDay()];
+    var others = courtBookings(ed.date, ed.court, ed.id);
+    var who = S.bookers.slice();
+    if (ed.booker && who.indexOf(ed.booker) === -1) who.unshift(ed.booker); // removed booker on an old booking
+    var picker = who.length
+      ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + who.map(function (name, i) {
+          return '<label><input type="radio" name="who" id="who-' + i + '" value="' + esc(name) + '"' + (ed.booker === name ? ' checked' : '') + '><span>' + esc(name) + '</span></label>';
+        }).join("") + '</div>'
+      : '<p class="empty">No bookers yet. <button class="linklike" data-act="go-bookers">Add bookers</button> first.</p>';
+    var starts = startOptions(s, ed.start).map(function (t) {
+      return '<option value="' + t + '"' + (t === ed.start ? ' selected' : '') + '>' + hm(t) + '</option>';
+    }).join("");
+    var lens = CFG.lengths.slice();
+    if (lens.indexOf(ed.minutes) === -1) lens.push(ed.minutes);
+    var lenPicker = lens.map(function (l) {
+      return '<label><input type="radio" name="len" id="len-' + l + '" value="' + l + '"' + (l === ed.minutes ? ' checked' : '') + '><span>' + l + ' min</span></label>';
+    }).join("");
+
+    w.innerHTML = '<div class="scrim" data-act="close"><form class="sheet" id="bookform" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
+      '<div><h3 id="sheet-title">' + (ed.id ? 'Court ' + ed.court + ' booking' : 'Book court ' + ed.court) + '</h3>' +
+      '<div class="when">' + short(d) + ' · session ' + hm(s.start) + '–' + hm(s.end) + '</div></div>' +
+      (others.length ? '<div class="field"><span class="flabel">Also on court ' + ed.court + '</span><ul class="others">' + others.map(function (x) {
+        return '<li>' + x.b.start + '–' + x.b.end + ' · ' + esc(x.b.booker) + '</li>'; }).join("") + '</ul></div>' : '') +
+      '<div class="field"><span class="flabel">Booked by</span>' + picker + '</div>' +
+      '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
+      '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
+      '<div id="result" class="result" aria-live="polite"></div>' +
+      '<div class="actions">' + (ed.id ? '<button type="button" class="btn danger" data-act="delete">Delete booking</button>' : '') +
+      '<span class="spacer"></span><button type="button" class="btn" data-act="close">Cancel</button>' +
+      '<button type="submit" class="btn primary" id="save">Save</button></div></form></div>';
+    w.hidden = false;
+    renderResult();
+    var first = w.querySelector('input[name="who"]:checked') || w.querySelector('input[name="who"]');
+    (first || $("start")).focus();
+  }
+
+  function saveBooking() {
+    var ed = S.edit; if (!ed) return;
+    var sel = document.querySelector('input[name="who"]:checked');
+    if (!sel) { toast("Pick who booked the court."); return; }
+    ed.booker = sel.value;
+    var p = problem(ed); if (p) { toast(p); return; }
+    var payload = { id: ed.id || "", date: ed.date, court: ed.court, start: hm(ed.start), minutes: ed.minutes, booker: ed.booker };
+    // Show it straight away; the server's answer replaces this.
+    var local = { id: ed.id || ("tmp" + Date.now()), date: ed.date, court: ed.court, start: payload.start, end: hm(ed.start + ed.minutes), minutes: ed.minutes, booker: ed.booker };
+    S.bookings = S.bookings.filter(function (b) { return b.id !== ed.id; }).concat([local]);
+    S.edit = null; renderSheet(); renderSessions();
+    write("saveBooking", payload, "Court " + payload.court + " " + payload.start + "–" + local.end + " saved");
+  }
+  function deleteBooking() {
+    var ed = S.edit; if (!ed || !ed.id) return;
+    S.bookings = S.bookings.filter(function (b) { return b.id !== ed.id; });
+    S.edit = null; renderSheet(); renderSessions();
+    write("deleteBooking", ed.id, "Booking deleted");
+  }
+
+  function render() {
+    $("view-sessions").hidden = S.tab !== "sessions";
+    $("view-bookers").hidden = S.tab !== "bookers";
+    document.querySelectorAll(".tabs button").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)); });
+    renderSessions();
+    renderBookers();
+  }
+
+  // ---------- events ----------
+  document.addEventListener("click", function (e) {
+    var tab = e.target.closest(".tabs button");
+    if (tab) { S.tab = tab.dataset.tab; render(); return; }
+    var blk = e.target.closest(".blk");
+    if (blk) { openExisting(blk.dataset.id); return; }
+    var add = e.target.closest(".add");
+    if (add) { if (!add.disabled) openNew(add.dataset.date, Number(add.dataset.court), null); return; }
+    var lane = e.target.closest(".lane");
+    if (lane) {
+      if (lane.classList.contains("locked")) { toast("Bookings for this session aren't open yet."); return; }
+      var r = lane.getBoundingClientRect();
+      var m = Number(lane.dataset.a0) + (e.clientX - r.left) / r.width * Number(lane.dataset.span);
+      openNew(lane.dataset.date, Number(lane.dataset.court), Math.floor(m / CFG.step) * CFG.step);
+      return;
+    }
+    var act = e.target.closest("[data-act]");
+    if (!act) return;
+    var a = act.dataset.act;
+    if (a === "close") { if (e.target === act || act.tagName === "BUTTON") { S.edit = null; renderSheet(); } return; }
+    if (a === "delete") deleteBooking();
+    else if (a === "go-bookers") { S.edit = null; renderSheet(); S.tab = "bookers"; render(); $("newname").focus(); }
+    else if (a === "remove") { S.confirmRemove = S.bookers[Number(act.dataset.i)]; renderBookers(); }
+    else if (a === "remove-no") { S.confirmRemove = null; renderBookers(); }
+    else if (a === "remove-yes") {
+      var name = S.bookers[Number(act.dataset.i)]; S.confirmRemove = null;
+      write("removeBooker", name, name + " removed");
+    }
+  });
+  document.addEventListener("change", function (e) {
+    if (!S.edit) return;
+    if (e.target.id === "start") { S.edit.start = Number(e.target.value); renderResult(); }
+    else if (e.target.name === "len") { S.edit.minutes = Number(e.target.value); renderResult(); }
+    else if (e.target.name === "who") { S.edit.booker = e.target.value; }
+  });
+  document.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (e.target.id === "bookform") saveBooking();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.edit) { S.edit = null; renderSheet(); } });
+
+  $("prev").onclick = function () { S.weekStart = addDays(S.weekStart, -7); renderSessions(); };
+  $("next").onclick = function () { S.weekStart = addDays(S.weekStart, 7); renderSessions(); };
+  $("thisweek").onclick = function () { S.weekStart = mondayOf(todayDate()); renderSessions(); };
+
+  $("addform").addEventListener("submit", function (e) {
+    e.preventDefault(); e.stopPropagation();
+    var input = $("newname"), name = input.value.trim().replace(/\s+/g, " ");
+    if (!name) return;
+    if (S.bookers.some(function (p) { return p.toLowerCase() === name.toLowerCase(); })) { toast(name + " is already on the list"); return; }
+    input.value = "";
+    write("addBooker", name, name + " added");
+  });
+
+  // ---------- start ----------
+  render();
+  load();
+  // Pick up other admins' changes every 30 seconds while the page is open.
+  setInterval(function () { if (!document.hidden && !S.busy && !S.edit) load(); }, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && !S.busy) load(); });
+})();
+</script>
+</body>
+</html>
