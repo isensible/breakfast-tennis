@@ -63,6 +63,14 @@ The app runs as the person using it, so access is controlled by the sheet's shar
 
 To remove someone, remove them from the sheet's sharing.
 
+### If an admin sees the page but no bookings
+
+The message under the title names the Google account the app is running as, and quotes Google's error:
+
+- **"…can't open the bookings sheet"**: share the sheet with that exact address as an **Editor** (add the address directly; "anyone with the link" isn't enough).
+- **"…couldn't tell which of your accounts to use"**: they're signed in to several Google accounts. Open the link in a private/incognito window and sign in with only the account the sheet is shared with.
+- Make sure they're using the deployment link ending in `/exec`, not `/dev`.
+
 ## Updating the code
 
 After editing, use **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.

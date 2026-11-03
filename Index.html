@@ -147,7 +147,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 500; z-index: 30; max-width: calc(100% - 32px); }
 </style>
 </head>
-<body>
+<body data-viewer="<?= viewer ?>">
 <div class="wrap">
   <header class="top">
     <div>
@@ -285,9 +285,15 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function load() {
     return call("getData").then(apply).catch(function (e) {
       var m = errMsg(e);
-      setStatus(/permission|access|authoriz/i.test(m) && !/Settings|Bookings tab/.test(m)
-        ? "You don't have access to the bookings sheet. Ask the club admin to share the Google Sheet with you as an editor, then reload."
-        : "Couldn't load bookings: " + m);
+      var who = document.body.getAttribute("data-viewer") || "";
+      var acct = who ? " You're signed in as " + who + "." : " Google didn't say which account you're signed in with.";
+      if (/authori[sz]ation is required/i.test(m)) {
+        setStatus("Google couldn't tell which of your accounts to use. This happens when you're signed in to more than one Google account. Open the link in a private window, sign in with only the account the sheet is shared with, and try again." + acct + " (Google said: " + m + ")");
+      } else if (/permission|access denied|not have access|requested entity/i.test(m) && !/Settings tab|Bookings tab/.test(m)) {
+        setStatus("This Google account can't open the bookings sheet." + acct + " Ask the club admin to share the sheet with that exact address as an Editor, then reload. (Google said: " + m + ")");
+      } else {
+        setStatus("Couldn't load bookings: " + m + acct);
+      }
     });
   }
   function write(fn, arg, okMsg) {

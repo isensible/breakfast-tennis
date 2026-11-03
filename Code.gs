@@ -40,7 +40,9 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 // ---------- web app ----------
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  const page = HtmlService.createTemplateFromFile('Index');
+  page.viewer = userEmail_(); // shown when loading fails, so access problems are easy to diagnose
+  return page.evaluate()
     .setTitle('Breakfast Tennis Courts')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
