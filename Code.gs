@@ -44,6 +44,7 @@ function doGet() {
   page.viewer = userEmail_(); // shown when loading fails, so access problems are easy to diagnose
   return page.evaluate()
     .setTitle('Breakfast Tennis Courts')
+    .setFaviconUrl('https://raw.githubusercontent.com/isensible/breakfast-tennis/main/favicon.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

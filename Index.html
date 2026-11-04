@@ -39,7 +39,9 @@ button { cursor: pointer; }
 
 header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
 h1 { font-family: var(--display); font-weight: 700; font-size: 2.1rem; line-height: 1; margin: 0; letter-spacing: .01em; }
-h1 span { color: var(--court); }
+h1 span { color: var(--court); margin-left: .25em; }
+h1 { display: flex; align-items: center; }
+h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .sub { color: var(--muted); margin: 4px 0 0; font-size: .92rem; }
 .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
 .tabs button { border: 0; background: none; padding: 7px 14px; border-radius: 7px; font-weight: 600; color: var(--muted); }
@@ -151,7 +153,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>Breakfast <span>Tennis</span></h1>
+      <h1><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="yolk" cx="0.38" cy="0.34" r="0.75"><stop offset="0" stop-color="#eef77a"/><stop offset="0.55" stop-color="#d3e33a"/><stop offset="1" stop-color="#a9bb1f"/></radialGradient><clipPath id="ball"><circle cx="33" cy="31" r="14.5"/></clipPath></defs><path d="M30 4.5c7.5-.8 12.6 3.4 17.4 6.6 5.6 3.7 12.4 6.2 12.6 14.2.2 7-4.6 10.6-5.4 16.4-.9 6.3-3.6 13.6-12.4 16.4-8.2 2.6-14.4-1.4-20.6-3.3C15.4 53 7 51.6 4.6 43.1 2.4 35.4 7.4 30.6 7.8 23.8 8.3 15.4 13.2 6.6 30 4.5z" fill="#ffffff" stroke="#d9ded6" stroke-width="1.5"/><circle cx="33" cy="31" r="14.5" fill="url(#yolk)"/><g clip-path="url(#ball)" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"><path d="M19.5 18.5c6.5 4.5 7.6 20.5.4 26"/><path d="M46.5 17.5c-7.2 5.5-6.1 21.5.4 26"/></g><circle cx="33" cy="31" r="14.5" fill="none" stroke="#8e9e17" stroke-opacity=".35" stroke-width="1"/></svg>Breakfast <span>Tennis</span></h1>
       <p class="sub" id="subtitle">Court bookings</p>
     </div>
     <div class="tabs" role="tablist">
