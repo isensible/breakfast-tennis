@@ -100,6 +100,31 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 }
 .blk small { font-weight: 500; opacity: .85; font-variant-numeric: tabular-nums; }
 .blk:hover { filter: brightness(1.08); }
+/* Provisional: holding the court, no opponent yet. Hatched outline so it reads as "pencilled in". */
+.blk.prov {
+  background-color: var(--surface); color: var(--court); box-shadow: inset 0 0 0 1.5px var(--court);
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--court-soft) 5px 10px);
+}
+/* Lapsed: no opponent by the deadline, so the club will have cancelled it. */
+.blk.lapsed { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
+.blk.lapsed .nm { text-decoration: line-through; }
+.key .k-prov { box-shadow: inset 0 0 0 1.5px var(--court); background: repeating-linear-gradient(135deg, transparent 0 2px, var(--court-soft) 2px 4px); }
+.key .k-lapsed { background: var(--warn-soft); box-shadow: inset 0 0 0 1.5px var(--warn); }
+
+/* Needs-an-opponent list */
+.attention { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; display: grid; gap: 8px; }
+.attention h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.2rem; letter-spacing: .01em; }
+.attention ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.attention li button {
+  width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-variant-numeric: tabular-nums;
+}
+.attention li button:hover { border-color: var(--court); }
+.attention .what { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.attention .due { color: var(--muted); font-size: .88rem; margin-left: auto; }
+.attention .lapsed .due, .attention .soon .due { color: var(--warn); font-weight: 600; }
+.tag { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--court-soft); color: var(--court); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
 .add { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); font-size: 1.1rem; line-height: 1; color: var(--court); padding: 0; }
 .add:hover:not(:disabled) { border-color: var(--court); }
 .add:disabled { opacity: .35; cursor: not-allowed; }
@@ -142,6 +167,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .result { font-variant-numeric: tabular-nums; font-weight: 600; }
 .result .note { font-weight: 400; color: var(--muted); }
 .result.bad { color: var(--warn); }
+.field input[type="text"] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-width: 0; width: 100%; }
+.hint { font-size: .85rem; color: var(--muted); margin: 0; }
+.result .state { display: block; margin-top: 3px; font-weight: 500; }
+.result .state.prov { color: var(--court); }
 .others { margin: 0; padding: 0; list-style: none; font-size: .88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions .spacer { flex: 1; }
@@ -165,6 +194,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   <div id="status" class="status">Loading bookings…</div>
 
   <section id="view-sessions" class="stack">
+    <div id="attention" class="attention" hidden></div>
     <div class="weeknav">
       <button class="btn icon" id="prev" aria-label="Previous week">‹</button>
       <button class="btn icon" id="next" aria-label="Next week">›</button>
@@ -197,13 +227,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 <script>
 (function () {
   // Filled from the Settings tab on every load.
-  var CFG = { courts: 0, lengths: [60, 90, 120], step: 30, bookAheadDays: 9 };
+  var CFG = { courts: 0, lengths: [60, 90, 120], step: 30, bookAheadDays: 9, confirmHours: 72 };
+  var HOUR = 3600000;
   var SESSIONS = {};   // day number (0 = Sunday) -> {start, end} in minutes
   var ORDER = [];      // session day numbers, Monday first
 
   var S = {
-    loaded: false, busy: false, today: null,
-    bookers: [], bookings: [],      // bookings: {id, date, court, start, end, minutes, booker}
+    loaded: false, busy: false, today: null, skew: 0,
+    bookers: [], bookings: [],      // bookings: {id, date, court, start, end, minutes, booker, opponent, startsAt}
     weekStart: mondayOf(new Date()),
     tab: "sessions", edit: null, confirmRemove: null
   };
@@ -221,6 +252,24 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function hm(m) { return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
   function sessionDates(ws) { return ORDER.map(function (dow) { return addDays(ws, dow === 0 ? 6 : dow - 1); }); }
   function todayDate() { return S.today ? parse(S.today) : parse(ymd(new Date())); }
+  function nowMs() { return Date.now() + S.skew; } // server clock, so a wrong phone clock can't mislead
+  function localStart(date, startMin) { var d = parse(date); d.setHours(0, startMin, 0, 0); return d.getTime(); }
+  function when(ms) { var d = new Date(ms); return short(d) + " " + hm(d.getHours() * 60 + d.getMinutes()); }
+  function untilText(ms) {
+    var h = Math.round((ms - nowMs()) / HOUR);
+    return h < 1 ? "within the hour" : h < 48 ? "in " + h + " hour" + (h === 1 ? "" : "s") : "in " + Math.round(h / 24) + " days";
+  }
+
+  // Opponent status of a booking:
+  //   "confirmed" — has an opponent
+  //   "prov"      — no opponent yet, before the confirm deadline
+  //   "lapsed"    — no opponent and the deadline has passed (the club cancels these)
+  function deadline(b) { return b.startsAt - CFG.confirmHours * HOUR; }
+  function bstatus(b) {
+    if (b.opponent) return "confirmed";
+    if (b.startsAt <= nowMs()) return "past";   // already played (or missed): no alert
+    return nowMs() >= deadline(b) ? "lapsed" : "prov";
+  }
 
   // ---------- utils ----------
   function $(id) { return document.getElementById(id); }
@@ -244,9 +293,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       .sort(function (x, y) { return x.s - y.s; });
   }
   // How much of the session window a court's bookings cover: "full", "part" or "free".
+  // Lapsed bookings don't count: the club will have released the court.
   function coverage(list, ws, we) {
     var t = ws, any = false;
-    list.forEach(function (x) {
+    list.filter(function (x) { return bstatus(x.b) !== "lapsed"; }).forEach(function (x) {
       if (x.e > ws && x.s < we) any = true;
       if (x.s <= t && x.e > t) t = x.e;
     });
@@ -277,7 +327,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   }
   function apply(data) {
     S.today = data.today;
+    if (data.now) S.skew = data.now - Date.now();
     applyConfig(data.config);
+    if (CFG.confirmHours == null) CFG.confirmHours = 72;
     S.bookers = data.bookers;
     S.bookings = data.bookings;
     if (!S.loaded) { S.loaded = true; S.weekStart = mondayOf(parse(data.today)); }
@@ -336,15 +388,23 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         ticks.push('<span class="' + cls + '" style="left:' + pct(t) + '">' + hm(t) + '</span>');
       }
 
-      var n = { full: 0, part: 0, free: 0 }, rows = [];
+      var n = { full: 0, part: 0, free: 0, prov: 0, lapsed: 0 }, rows = [];
       for (var c = 1; c <= CFG.courts; c++) {
         var list = courtBookings(date, c);
         var cov = coverage(list, s.start, s.end);
         n[cov]++;
         var blocks = list.map(function (x) {
-          return '<button class="blk" data-id="' + esc(x.b.id) + '" style="left:calc(' + pct(x.s) + ' + 1px);width:calc(' + ((x.e - x.s) / span * 100).toFixed(3) + '% - 2px)"' +
-            ' title="' + esc(x.b.booker) + ' · ' + x.b.start + '–' + x.b.end + '" aria-label="Court ' + c + ', ' + esc(x.b.booker) + ', ' + x.b.start + ' to ' + x.b.end + '">' +
-            esc(x.b.booker) + ' <small>' + x.b.start + '–' + x.b.end + '</small></button>';
+          var st = bstatus(x.b), b = x.b;
+          if (st === "prov") n.prov++;
+          if (st === "lapsed") n.lapsed++;
+          var who = esc(b.booker) + (b.opponent ? " v " + esc(b.opponent) : "");
+          var note = st === "prov" ? "Provisional: add an opponent by " + when(deadline(b))
+            : st === "lapsed" ? "Not confirmed by " + when(deadline(b)) + ", so the club will have cancelled it"
+            : st === "past" && !b.opponent ? "No opponent recorded" : "Confirmed";
+          var label = st === "prov" ? '<span class="tag">Prov</span> ' : st === "lapsed" ? '<span class="tag warn">Lapsed</span> ' : "";
+          return '<button class="blk' + (st === "prov" ? " prov" : st === "lapsed" ? " lapsed" : "") + '" data-id="' + esc(b.id) + '" style="left:calc(' + pct(x.s) + ' + 1px);width:calc(' + ((x.e - x.s) / span * 100).toFixed(3) + '% - 2px)"' +
+            ' title="' + who + ' · ' + b.start + '–' + b.end + ' · ' + esc(note) + '" aria-label="Court ' + c + ', ' + who + ', ' + b.start + ' to ' + b.end + '. ' + esc(note) + '">' +
+            label + '<span class="nm">' + who + '</span> <small>' + b.start + '–' + b.end + '</small></button>';
         }).join("");
         rows.push('<div class="row"><span class="num ' + cov + '" title="' + (cov === "full" ? "Covered" : cov === "part" ? "Partly covered" : "Not booked") + '">' + c + '</span>' +
           '<div class="lane' + (locked ? ' locked' : '') + '" data-date="' + date + '" data-court="' + c + '" data-a0="' + a0 + '" data-span="' + span + '">' +
@@ -364,11 +424,40 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         '<div class="session-head"><h2>' + short(d) + '</h2><span class="time">' + hm(s.start) + '–' + hm(s.end) + '</span>' + chip +
         '<span class="count"><span class="key"><i class="k-full"></i><b>' + n.full + '</b> covered</span>' +
         '<span class="key"><i class="k-part"></i><b>' + n.part + '</b> partly</span>' +
-        '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span></span></div>' +
+        '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span>' +
+        (n.prov ? '<span class="key"><i class="k-prov"></i><b>' + n.prov + '</b> provisional</span>' : '') +
+        (n.lapsed ? '<span class="key"><i class="k-lapsed"></i><b>' + n.lapsed + '</b> lapsed</span>' : '') + '</span></div>' +
         (locked ? '<div class="lockednote">Bookings for this session open on ' + short(addDays(d, -CFG.bookAheadDays)) + '.</div>' : '') +
         '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div></article>';
     }).join("");
     $("tally").textContent = totalFull + " of " + totalCourts + " courts fully covered";
+  }
+
+  // ---------- render: needs an opponent ----------
+  // Every upcoming provisional booking whose deadline is within 2 days, plus any that have lapsed.
+  function renderAttention() {
+    var el = $("attention");
+    if (!S.loaded) { el.hidden = true; return; }
+    var soon = nowMs() + 48 * HOUR;
+    var items = S.bookings.filter(function (b) {
+      var st = bstatus(b);
+      return st === "lapsed" || (st === "prov" && deadline(b) <= soon);
+    }).sort(function (a, b) { return deadline(a) - deadline(b); });
+    if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
+    var lapsed = items.filter(function (b) { return bstatus(b) === "lapsed"; }).length;
+    el.innerHTML = '<h2>Needs an opponent</h2>' +
+      '<p class="hint">Bookings without an opponent are cancelled by the club ' + CFG.confirmHours + ' hours before they start.' +
+      (lapsed ? ' Lapsed ones are past that point: check the club system, then add the opponent or delete the booking.' : '') + '</p>' +
+      '<ul>' + items.map(function (b) {
+        var st = bstatus(b), dl = deadline(b);
+        var cls = st === "lapsed" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
+        return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
+          (st === "lapsed" ? '<span class="tag warn">Lapsed</span>' : '<span class="tag">Prov</span>') +
+          '<span class="what">Court ' + b.court + ' · ' + short(parse(b.date)) + ' ' + b.start + ' · ' + esc(b.booker) + '</span>' +
+          '<span class="due">' + (st === "lapsed" ? "Deadline was " + when(dl) : "Add by " + when(dl) + " (" + untilText(dl) + ")") + '</span>' +
+          '</button></li>';
+      }).join("") + '</ul>';
+    el.hidden = false;
   }
 
   // ---------- render: bookers ----------
@@ -391,7 +480,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   }
 
   // ---------- booking form ----------
-  // S.edit = {id?, date, court, start (min), minutes, booker}
+  // S.edit = {id?, date, court, start (min), minutes, booker, opponent}
   function openNew(date, court, startMin) {
     var s = SESSIONS[parse(date).getDay()];
     var list = courtBookings(date, court);
@@ -410,13 +499,13 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var room2 = Math.min(next, Math.max(s.end, start + minLen)) - start;
       CFG.lengths.forEach(function (l) { if (l <= room2) len = l; });
     }
-    S.edit = { id: null, date: date, court: court, start: start, minutes: len, booker: null };
+    S.edit = { id: null, date: date, court: court, start: start, minutes: len, booker: null, opponent: "" };
     renderSheet();
   }
   function openExisting(id) {
     var b = S.bookings.filter(function (x) { return x.id === id; })[0];
     if (!b) return;
-    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, booker: b.booker };
+    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, booker: b.booker, opponent: b.opponent || "" };
     renderSheet();
   }
   function startOptions(s, current) {
@@ -434,6 +523,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (!(st < s.end && en > s.start)) return "This doesn't overlap the " + hm(s.start) + "–" + hm(s.end) + " session.";
     var clash = courtBookings(ed.date, ed.court, ed.id).filter(function (x) { return x.s < en && st < x.e; })[0];
     if (clash) return "Clashes with " + clash.b.booker + " " + clash.b.start + "–" + clash.b.end + ".";
+    if (!ed.opponent.trim()) {
+      var at = localStart(ed.date, st);
+      if (at > nowMs() && nowMs() >= at - CFG.confirmHours * HOUR) {
+        return "This booking starts within " + CFG.confirmHours + " hours, so it needs an opponent. The club cancels unconfirmed bookings " + CFG.confirmHours + " hours before.";
+      }
+    }
     return "";
   }
   function renderResult() {
@@ -443,8 +538,24 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (ed.start < s.start) notes.push("starts before the session");
     if (en > s.end) notes.push("runs past the session");
     el.className = "result" + (p ? " bad" : "");
-    el.innerHTML = p ? esc(p) : hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '');
+    if (p) { el.innerHTML = esc(p); }
+    else {
+      var at = localStart(ed.date, ed.start), state;
+      if (ed.opponent.trim()) state = '<span class="state">Confirmed</span>';
+      else if (at <= nowMs()) state = '<span class="state">No opponent recorded</span>';
+      else state = '<span class="state prov">Provisional · add an opponent by ' + when(at - CFG.confirmHours * HOUR) + '</span>';
+      el.innerHTML = hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '') + state;
+    }
     $("save").disabled = !!p;
+  }
+  // Names already used as opponents, for type-ahead.
+  function knownOpponents() {
+    var seen = {}, out = [];
+    S.bookings.forEach(function (b) {
+      var k = (b.opponent || "").toLowerCase();
+      if (k && !seen[k]) { seen[k] = true; out.push(b.opponent); }
+    });
+    return out.sort(function (a, b) { return a.localeCompare(b); });
   }
   function renderSheet() {
     var w = $("sheetwrap");
@@ -471,10 +582,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<div><h3 id="sheet-title">' + (ed.id ? 'Court ' + ed.court + ' booking' : 'Book court ' + ed.court) + '</h3>' +
       '<div class="when">' + short(d) + ' · session ' + hm(s.start) + '–' + hm(s.end) + '</div></div>' +
       (others.length ? '<div class="field"><span class="flabel">Also on court ' + ed.court + '</span><ul class="others">' + others.map(function (x) {
-        return '<li>' + x.b.start + '–' + x.b.end + ' · ' + esc(x.b.booker) + '</li>'; }).join("") + '</ul></div>' : '') +
+        return '<li>' + x.b.start + '–' + x.b.end + ' · ' + esc(x.b.booker) + (x.b.opponent ? ' v ' + esc(x.b.opponent) : ' (provisional)') + '</li>'; }).join("") + '</ul></div>' : '') +
       '<div class="field"><span class="flabel">Booked by</span>' + picker + '</div>' +
       '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
       '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
+      '<div class="field"><label class="flabel" for="opp">Opponent</label>' +
+      '<input type="text" id="opp" list="opplist" maxlength="40" autocomplete="off" placeholder="Member name" value="' + esc(ed.opponent) + '">' +
+      '<datalist id="opplist">' + knownOpponents().map(function (o) { return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>' +
+      '<p class="hint">Leave blank to save as provisional. You must add one at least ' + CFG.confirmHours + ' hours before the booking, or the club cancels it.</p></div>' +
       '<div id="result" class="result" aria-live="polite"></div>' +
       '<div class="actions">' + (ed.id ? '<button type="button" class="btn danger" data-act="delete">Delete booking</button>' : '') +
       '<span class="spacer"></span><button type="button" class="btn" data-act="close">Cancel</button>' +
@@ -490,18 +605,20 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var sel = document.querySelector('input[name="who"]:checked');
     if (!sel) { toast("Pick who booked the court."); return; }
     ed.booker = sel.value;
+    ed.opponent = ($("opp") ? $("opp").value : ed.opponent).trim().replace(/\s+/g, " ");
     var p = problem(ed); if (p) { toast(p); return; }
-    var payload = { id: ed.id || "", date: ed.date, court: ed.court, start: hm(ed.start), minutes: ed.minutes, booker: ed.booker };
+    var payload = { id: ed.id || "", date: ed.date, court: ed.court, start: hm(ed.start), minutes: ed.minutes, booker: ed.booker, opponent: ed.opponent };
     // Show it straight away; the server's answer replaces this.
-    var local = { id: ed.id || ("tmp" + Date.now()), date: ed.date, court: ed.court, start: payload.start, end: hm(ed.start + ed.minutes), minutes: ed.minutes, booker: ed.booker };
+    var local = { id: ed.id || ("tmp" + Date.now()), date: ed.date, court: ed.court, start: payload.start, end: hm(ed.start + ed.minutes),
+      minutes: ed.minutes, booker: ed.booker, opponent: ed.opponent, startsAt: localStart(ed.date, ed.start) };
     S.bookings = S.bookings.filter(function (b) { return b.id !== ed.id; }).concat([local]);
-    S.edit = null; renderSheet(); renderSessions();
-    write("saveBooking", payload, "Court " + payload.court + " " + payload.start + "–" + local.end + " saved");
+    S.edit = null; renderSheet(); renderAttention(); renderSessions();
+    write("saveBooking", payload, "Court " + payload.court + " " + payload.start + "–" + local.end + " saved" + (ed.opponent ? "" : " as provisional"));
   }
   function deleteBooking() {
     var ed = S.edit; if (!ed || !ed.id) return;
     S.bookings = S.bookings.filter(function (b) { return b.id !== ed.id; });
-    S.edit = null; renderSheet(); renderSessions();
+    S.edit = null; renderSheet(); renderAttention(); renderSessions();
     write("deleteBooking", ed.id, "Booking deleted");
   }
 
@@ -509,6 +626,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     $("view-sessions").hidden = S.tab !== "sessions";
     $("view-bookers").hidden = S.tab !== "bookers";
     document.querySelectorAll(".tabs button").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)); });
+    renderAttention();
     renderSessions();
     renderBookers();
   }
@@ -517,6 +635,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   document.addEventListener("click", function (e) {
     var tab = e.target.closest(".tabs button");
     if (tab) { S.tab = tab.dataset.tab; render(); return; }
+    var opener = e.target.closest("[data-open]");
+    if (opener) { openExisting(opener.dataset.open); return; }
     var blk = e.target.closest(".blk");
     if (blk) { openExisting(blk.dataset.id); return; }
     var add = e.target.closest(".add");
@@ -547,6 +667,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (e.target.id === "start") { S.edit.start = Number(e.target.value); renderResult(); }
     else if (e.target.name === "len") { S.edit.minutes = Number(e.target.value); renderResult(); }
     else if (e.target.name === "who") { S.edit.booker = e.target.value; }
+  });
+  document.addEventListener("input", function (e) {
+    if (S.edit && e.target.id === "opp") { S.edit.opponent = e.target.value; renderResult(); }
   });
   document.addEventListener("submit", function (e) {
     e.preventDefault();

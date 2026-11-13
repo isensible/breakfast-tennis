@@ -28,6 +28,14 @@ Bookings are individual time slots: a court can have several in one session (for
 - The form shows the finish time, notes when a booking starts before or runs past the session, and won't save if it clashes with another booking on that court.
 - Court numbers are coloured by coverage of the published session: green = covered, yellow = partly, dashed = free.
 
+### Opponents and provisional bookings
+
+- Each booking has an optional **Opponent** (the member declared against the court). Names typed before are suggested as you type.
+- A booking with no opponent is **provisional**. It's shown hatched with a "Prov" tag and a "confirm by" deadline.
+- Provisional bookings are only allowed until 72 hours before the booking starts (set by **Confirm opponent (hours before)** in Settings). Within that window, the form and the server both refuse to save a booking without an opponent.
+- A provisional booking still without an opponent at the deadline is shown as **Lapsed** (struck through, orange), because the club will have cancelled it. Lapsed bookings don't count towards court coverage. Check the club system, then add the opponent or delete the booking.
+- The **Needs an opponent** list at the top of the Sessions view shows lapsed bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
+
 ## Settings tab
 
 Change these in the sheet; the app picks them up the next time anyone loads or refreshes the page. No code changes or redeploy needed.
@@ -37,6 +45,7 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Book ahead days | 9 | Bookings open this many days before a session. Later sessions are locked, show their opening date, and the server refuses them. |
 | Courts | 14 | Number of courts shown for each session. |
 | Booking lengths (minutes) | 60, 90, 120 | The lengths offered in the booking form, separated by commas. |
+| Confirm opponent (hours before) | 72 | A booking with no opponent is *provisional*. It must have an opponent this many hours before it starts, or the club cancels it. If this row is missing, 72 is used. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:
@@ -79,7 +88,7 @@ If you set up an earlier version of this app, its **Bookings** tab has a differe
 
 ## Editing the sheet by hand
 
-The **Bookings** tab columns are: Date | Court | Start | Finish | Minutes | Booker | Updated | Updated by | ID.
+The **Bookings** tab columns are: Date | Court | Start | Finish | Minutes | Booker | Updated | Updated by | ID | Opponent. (The Opponent heading is added automatically to existing tabs.)
 
 - Date as `yyyy-mm-dd` (e.g. `2026-11-11`) or `dd/mm/yyyy`; Court as a number; Start as `hh:mm`.
 - Fill in either **Minutes** or **Finish**; the app works out the other.

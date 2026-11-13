@@ -16,9 +16,9 @@ const LOOKBACK_DAYS = 56;     // how far back the app loads bookings
 const SETTINGS = 'Settings';
 const BOOKINGS = 'Bookings';
 const BOOKERS = 'Bookers';
-const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Booker', 'Updated', 'Updated by', 'ID'];
+const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Booker', 'Updated', 'Updated by', 'ID', 'Opponent'];
 const BOOKERS_HEADER = ['Name'];
-const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, booker: 5, updated: 6, by: 7, id: 8 };
+const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, booker: 5, updated: 6, by: 7, id: 8, opponent: 9 };
 
 // Defaults written to a new Settings tab. Edit the tab, not these.
 const DEFAULT_SETTINGS = [
@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = [
   ['Courts', '14', ''],
   ['Booking lengths (minutes)', '60, 90, 120', ''],
   ['Start time step (minutes)', '30', ''],
+  ['Confirm opponent (hours before)', '72', ''],
   ['', '', ''],
   ['Day', 'Start', 'Finish'],
   ['Wednesday', '06:30', '08:00'],
@@ -35,6 +36,7 @@ const DEFAULT_SETTINGS = [
 ];
 const DEFAULT_LENGTHS = [60, 90, 120];
 const DEFAULT_STEP = 30;
+const DEFAULT_CONFIRM_HOURS = 72;
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // ---------- web app ----------
@@ -62,12 +64,14 @@ function getData() {
   const today = today_();
   const since = addDays_(today, -LOOKBACK_DAYS);
   const bookings = readBookings_().filter(b => b.date >= since);
-  return { today: today, config: config, bookers: readBookers_(), bookings: bookings };
+  return { today: today, now: Date.now(), config: config, bookers: readBookers_(), bookings: bookings };
 }
 
 /**
  * Create or update one booking.
- * b = { id (omit for new), date: 'yyyy-mm-dd', court: n, start: 'hh:mm', minutes: n, booker: name }
+ * b = { id (omit for new), date: 'yyyy-mm-dd', court: n, start: 'hh:mm', minutes: n, booker: name, opponent: name }
+ * A booking with no opponent is provisional. That's only allowed until
+ * config.confirmHours before the booking starts, when the club cancels unconfirmed bookings.
  */
 function saveBooking(b) {
   return withLock_(() => {
@@ -77,7 +81,9 @@ function saveBooking(b) {
     const start = time_(b.start);
     const minutes = Number(b.minutes);
     const booker = String(b.booker || '').trim();
+    const opponent = String(b.opponent || '').trim().replace(/\s+/g, ' ');
     const id = String(b.id || '');
+    if (opponent.length > 40) throw new Error('Keep the opponent’s name under 40 characters.');
 
     const session = validateDateCourt_(config, date, court);
     if (!start) throw new Error('Pick a start time.');
@@ -93,10 +99,18 @@ function saveBooking(b) {
       o.date === date && o.court === court && o.id !== id && toMin_(o.start) < e && s < toMin_(o.end))[0];
     if (clash) throw new Error('Court ' + court + ' is already booked ' + clash.start + '–' + clash.end + ' by ' + clash.booker + '.');
 
+    if (!opponent) {
+      const startsAt = startTime_(date, start);
+      const deadline = startsAt - config.confirmHours * 3600000;
+      if (Date.now() < startsAt && Date.now() >= deadline) {
+        throw new Error('This booking is within ' + config.confirmHours + ' hours, so it needs an opponent. Unconfirmed bookings are cancelled ' + config.confirmHours + ' hours before.');
+      }
+    }
+
     const sh = bookingsSheet_();
     const row = id ? findRowById_(sh, id) : 0;
     if (id && !row) throw new Error('That booking was deleted by someone else.');
-    const values = [date, court, start, fromMin_(e), minutes, booker, new Date(), userEmail_(), id || newId_()];
+    const values = [date, court, start, fromMin_(e), minutes, booker, new Date(), userEmail_(), id || newId_(), opponent];
     if (row) sh.getRange(row, 1, 1, values.length).setValues([values]);
     else sh.appendRow(values);
   });
@@ -142,6 +156,9 @@ function bookingsSheet_() {
   if (String(header[2]).trim().toLowerCase() !== 'start') {
     throw new Error('The Bookings tab is in an older layout. Rename or delete that tab, then reload: the app will create a new one.');
   }
+  // Tabs created before opponents existed get the Opponent heading added once.
+  const oppHead = sh.getRange(1, COL.opponent + 1);
+  if (!String(oppHead.getDisplayValue()).trim()) oppHead.setValue('Opponent').setFontWeight('bold');
   return sh;
 }
 
@@ -165,6 +182,8 @@ function readBookings_() {
       id: id, date: date, court: court, start: start,
       end: fromMin_(toMin_(start) + minutes), minutes: minutes,
       booker: String(r[COL.booker]).trim(),
+      opponent: String(r[COL.opponent] || '').trim(),
+      startsAt: startTime_(date, start),
     });
   });
   return out;
@@ -190,8 +209,8 @@ function settingsSheet_() {
     sh.getRange(1, 1, 30, 3).setNumberFormat('@'); // keep times and lists as plain text
     sh.getRange(1, 1, DEFAULT_SETTINGS.length, 3).setValues(DEFAULT_SETTINGS);
     sh.getRange('A1:B1').setFontWeight('bold');
-    sh.getRange('A7:C7').setFontWeight('bold');
-    sh.getRange('E7').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
+    sh.getRange('A8:C8').setFontWeight('bold');
+    sh.getRange('E8').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
       .setFontStyle('italic').setFontColor('#666666');
     sh.autoResizeColumns(1, 3);
   }
@@ -213,6 +232,7 @@ function readConfig_() {
     else if (label === 'courts') found.courts = [values[i][1], i];
     else if (label.indexOf('booking length') === 0) found.lengths = [values[i][1], i];
     else if (label.indexOf('start time step') === 0) found.step = [values[i][1], i];
+    else if (label.indexOf('confirm opponent') === 0) found.confirm = [values[i][1], i];
     else if (label === 'day' && dayHeader < 0) dayHeader = i;
   }
   const where = k => 'Settings tab, row ' + (found[k][1] + 1);
@@ -240,6 +260,14 @@ function readConfig_() {
     if ([5, 10, 15, 20, 30, 60].indexOf(step) === -1) throw new Error(where('step') + ': start time step must be 5, 10, 15, 20, 30 or 60 minutes.');
   }
 
+  let confirmHours = DEFAULT_CONFIRM_HOURS;
+  if (found.confirm && found.confirm[0].trim()) {
+    confirmHours = Number(found.confirm[0]);
+    if (!(confirmHours >= 0 && confirmHours <= 24 * 14 && Math.floor(confirmHours) === confirmHours)) {
+      throw new Error(where('confirm') + ': "Confirm opponent (hours before)" must be a whole number of hours, e.g. 72.');
+    }
+  }
+
   if (dayHeader < 0) throw new Error('Settings tab: add a row with "Day | Start | Finish" headings above the session days.');
   const sessions = [];
   for (let i = dayHeader + 1; i < values.length; i++) {
@@ -257,7 +285,7 @@ function readConfig_() {
   if (!sessions.length) throw new Error('Settings tab: list at least one session day under the "Day" heading.');
   sessions.sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7)); // Monday first
 
-  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, sessions: sessions };
+  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, sessions: sessions };
 }
 
 function dayIndex_(text) {
@@ -344,6 +372,8 @@ function normDate_(text) {
 
 function tz_() { return Session.getScriptTimeZone() || 'Europe/London'; }
 function today_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'); }
+/** Milliseconds timestamp of a booking's start, in the club's time zone (handles clock changes). */
+function startTime_(ymd, hhmm) { return Utilities.parseDate(ymd + ' ' + hhmm, tz_(), 'yyyy-MM-dd HH:mm').getTime(); }
 function utc_(ymd) { const p = String(ymd).split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]); }
 function dow_(ymd) { return new Date(utc_(ymd)).getUTCDay(); }
 function addDays_(ymd, n) { return new Date(utc_(ymd) + n * 86400000).toISOString().slice(0, 10); }
