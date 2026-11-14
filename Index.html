@@ -62,7 +62,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 
 /* Session card */
 .session { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 16px; display: grid; gap: 12px; min-width: 0; }
-.session.past { opacity: .62; }
+.session.past .session-head, .session.past .board { opacity: .62; } /* attendance stays full strength: it's filled in after play */
 .session-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
 .session-head h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.5rem; line-height: 1.1; }
 .session-head .time { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
@@ -105,11 +105,11 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
   background-color: var(--surface); color: var(--court); box-shadow: inset 0 0 0 1.5px var(--court);
   background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--court-soft) 5px 10px);
 }
-/* Lapsed: no opponent by the deadline, so the club will have cancelled it. */
-.blk.lapsed { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
-.blk.lapsed .nm { text-decoration: line-through; }
+/* May have been cancelled: provisional and past the confirm deadline. */
+.blk.risk { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
+
 .key .k-prov { box-shadow: inset 0 0 0 1.5px var(--court); background: repeating-linear-gradient(135deg, transparent 0 2px, var(--court-soft) 2px 4px); }
-.key .k-lapsed { background: var(--warn-soft); box-shadow: inset 0 0 0 1.5px var(--warn); }
+.key .k-risk { background: var(--warn-soft); box-shadow: inset 0 0 0 1.5px var(--warn); }
 
 /* Needs-an-opponent list */
 .attention { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; display: grid; gap: 8px; }
@@ -130,7 +130,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .add:disabled { opacity: .35; cursor: not-allowed; }
 .lockednote { font-size: .85rem; color: var(--muted); }
 
-/* Bookers */
+/* Players */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
 .panel h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.5rem; }
 .addrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -176,6 +176,52 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .actions .spacer { flex: 1; }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 500; z-index: 30; max-width: calc(100% - 32px); }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }
+.toggle input { width: 17px; height: 17px; accent-color: var(--court); margin: 0; }
+.statusbox { display: grid; gap: 6px; }
+
+/* Opponent pickers */
+.opps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 460px) { .opps { grid-template-columns: minmax(0, 1fr); } }
+.opps select { width: 100%; min-width: 0; }
+
+/* Attendance */
+.att { border-top: 1px solid var(--line); padding-top: 10px; }
+.att summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; list-style: none; }
+.att summary::-webkit-details-marker { display: none; }
+.att summary::before { content: "▸"; color: var(--muted); font-size: .8rem; width: .8em; }
+.att[open] summary::before { content: "▾"; }
+.att-title { font-family: var(--display); font-weight: 700; font-size: 1.15rem; }
+.att-sum { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+.att-sum .bad { color: var(--warn); font-weight: 600; }
+.att-body { display: grid; gap: 10px; margin-top: 10px; }
+.att-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; border-top: 1px solid var(--line); }
+.att-row:first-child { border-top: 0; }
+.att-who { flex: 1 1 180px; min-width: 0; display: grid; }
+.att-name { font-weight: 600; overflow-wrap: anywhere; }
+.att-role { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.att-role .mark { color: var(--warn); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 5px 11px; font-weight: 500; font-size: .88rem; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg .yes[aria-pressed="true"] { background: var(--court); color: var(--court-ink); }
+.seg .no[aria-pressed="true"] { background: var(--warn); color: var(--surface); }
+.x { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+.x:hover { color: var(--warn); }
+.att-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.att-foot select { flex: 1 1 200px; min-width: 0; }
+
+/* Players view */
+.people .pid { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.people .who { flex: 1 1 160px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.people .stat .bad { color: var(--warn); font-weight: 600; }
+.people input[type="text"] { flex: 1 1 160px; min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.search { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; }
+.marks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+.marks li { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 7px 10px; border-radius: 8px; background: var(--warn-soft); }
+.marks li b { color: var(--warn); }
+.marks .meta { color: var(--ink); font-size: .9rem; }
 </style>
 </head>
 <body data-viewer="<?= viewer ?>">
@@ -187,7 +233,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     </div>
     <div class="tabs" role="tablist">
       <button id="tab-sessions" role="tab" aria-selected="true" data-tab="sessions">Sessions</button>
-      <button id="tab-bookers" role="tab" aria-selected="false" data-tab="bookers">Bookers</button>
+      <button id="tab-players" role="tab" aria-selected="false" data-tab="players">Players</button>
     </div>
   </header>
 
@@ -206,16 +252,19 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     <div id="sessions" class="stack"></div>
   </section>
 
-  <section id="view-bookers" hidden>
+  <section id="view-players" class="stack" hidden>
+    <div class="panel" id="marks"></div>
     <div class="panel">
       <div>
-        <h2>Court bookers</h2>
-        <p class="sub">The admin team members who book courts. Pick from this list when you record a booking.</p>
+        <h2>Players</h2>
+        <p class="sub">Everyone who books courts, plays as an opponent or comes to sessions. Tick Booker for the people who book courts.</p>
       </div>
       <form class="addrow" id="addform">
-        <input id="newname" placeholder="Name, e.g. Sarah P." autocomplete="off" maxlength="40" aria-label="Booker name">
-        <button class="btn primary" type="submit">Add booker</button>
+        <input id="newname" placeholder="New player’s name" autocomplete="off" maxlength="40" aria-label="New player’s name">
+        <label class="toggle"><input type="checkbox" id="newbooker"> Booker</label>
+        <button class="btn primary" type="submit">Add player</button>
       </form>
+      <input id="pquery" class="search" type="search" placeholder="Find a player" autocomplete="off" aria-label="Find a player">
       <ul class="people" id="people"></ul>
     </div>
   </section>
@@ -234,9 +283,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
   var S = {
     loaded: false, busy: false, today: null, skew: 0,
-    bookers: [], bookings: [],      // bookings: {id, date, court, start, end, minutes, booker, opponent, startsAt}
+    players: [], byId: {},
+    bookings: [],      // {id, date, court, start, end, minutes, status, bookerId, opponentIds, startsAt}
+    attendance: [],    // {date, playerId, status: "Attended" | "No-show" | "", added}
+    marks: [],         // {date, playerId, court, start, end, role}
     weekStart: mondayOf(new Date()),
-    tab: "sessions", edit: null, confirmRemove: null
+    tab: "sessions", edit: null, openAtt: {}, query: "", renaming: null, confirmRemove: null
   };
 
   // ---------- dates & times ----------
@@ -260,31 +312,40 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     return h < 1 ? "within the hour" : h < 48 ? "in " + h + " hour" + (h === 1 ? "" : "s") : "in " + Math.round(h / 24) + " days";
   }
 
-  // Opponent status of a booking:
-  //   "confirmed" — has an opponent
-  //   "prov"      — no opponent yet, before the confirm deadline
-  //   "lapsed"    — no opponent and the deadline has passed (the club cancels these)
-  function deadline(b) { return b.startsAt - CFG.confirmHours * HOUR; }
-  function bstatus(b) {
-    if (b.opponent) return "confirmed";
-    if (b.startsAt <= nowMs()) return "past";   // already played (or missed): no alert
-    return nowMs() >= deadline(b) ? "lapsed" : "prov";
-  }
-
   // ---------- utils ----------
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   var toastTimer;
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 2800); }
   function setStatus(msg) { var s = $("status"); s.textContent = msg || ""; s.hidden = !msg; }
-  function call(fn) {
-    var args = Array.prototype.slice.call(arguments, 1);
+  function call(fn, arg) {
     return new Promise(function (res, rej) {
       var r = google.script.run.withSuccessHandler(res).withFailureHandler(rej);
-      r[fn].apply(r, args);
+      if (arg === undefined) r[fn](); else r[fn](arg);
     });
   }
   function errMsg(e) { return (e && e.message ? e.message : String(e)).replace(/^Exception:\s*/, ""); }
+  function pname(id) { var p = S.byId[id]; return p ? p.name : "Unknown player"; }
+  function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  // ---------- booking status ----------
+  // "confirmed" — Confirmed (opponents named, or made inside the confirm window)
+  // "prov"      — Provisional, before the confirm deadline
+  // "risk"      — Provisional and past the deadline: the club may have cancelled it
+  // "past"      — Provisional and already started
+  function deadline(b) { return b.startsAt - CFG.confirmHours * HOUR; }
+  function bstatus(b) {
+    if (b.status !== "Provisional") return "confirmed";
+    if (b.startsAt <= nowMs()) return "past";
+    return nowMs() >= deadline(b) ? "risk" : "prov";
+  }
+  function teamText(b) {
+    var o = b.opponentIds;
+    return pname(b.bookerId) + (o.length === 1 ? " v " + pname(o[0]) : o.length ? " +" + o.length : "");
+  }
+  function teamFull(b) {
+    return pname(b.bookerId) + (b.opponentIds.length ? " with " + b.opponentIds.map(pname).join(", ") : ", no opponents yet");
+  }
 
   // Bookings on one court for one date, sorted by start, as minutes.
   function courtBookings(date, court, exceptId) {
@@ -293,10 +354,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       .sort(function (x, y) { return x.s - y.s; });
   }
   // How much of the session window a court's bookings cover: "full", "part" or "free".
-  // Lapsed bookings don't count: the club will have released the court.
   function coverage(list, ws, we) {
     var t = ws, any = false;
-    list.filter(function (x) { return bstatus(x.b) !== "lapsed"; }).forEach(function (x) {
+    list.forEach(function (x) {
       if (x.e > ws && x.s < we) any = true;
       if (x.s <= t && x.e > t) t = x.e;
     });
@@ -311,9 +371,29 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     return { start: t, next: next };
   }
 
+  // ---------- attendance ----------
+  function attRow(date, pid) { return S.attendance.filter(function (a) { return a.date === date && a.playerId === pid; })[0]; }
+  // Everyone named on that session's bookings, plus anyone else with an attendance record.
+  function sessionPlayers(date) {
+    var map = {}, out = [];
+    function get(pid) {
+      if (!map[pid]) { map[pid] = { id: pid, roles: [], status: "", added: false, onBooking: false }; out.push(map[pid]); }
+      return map[pid];
+    }
+    S.bookings.filter(function (b) { return b.date === date; })
+      .sort(function (a, b) { return (a.start + pad(a.court)).localeCompare(b.start + pad(b.court)); })
+      .forEach(function (b) {
+        var r = get(b.bookerId); r.onBooking = true; r.roles.push("Court " + b.court + " " + b.start + " · booker");
+        b.opponentIds.forEach(function (pid) { var o = get(pid); o.onBooking = true; o.roles.push("Court " + b.court + " " + b.start + " · opponent"); });
+      });
+    S.attendance.filter(function (a) { return a.date === date; }).forEach(function (a) { var r = get(a.playerId); r.status = a.status; r.added = a.added; });
+    return out.sort(function (a, b) { return pname(a.id).localeCompare(pname(b.id)); });
+  }
+
   // ---------- data ----------
   function applyConfig(cfg) {
     CFG = cfg;
+    if (CFG.confirmHours == null) CFG.confirmHours = 72;
     SESSIONS = {}; ORDER = [];
     cfg.sessions.forEach(function (s) { SESSIONS[s.dow] = { start: toMin(s.start), end: toMin(s.end) }; ORDER.push(s.dow); });
     var groups = [];
@@ -329,9 +409,11 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     S.today = data.today;
     if (data.now) S.skew = data.now - Date.now();
     applyConfig(data.config);
-    if (CFG.confirmHours == null) CFG.confirmHours = 72;
-    S.bookers = data.bookers;
+    S.players = data.players;
+    S.byId = {}; S.players.forEach(function (p) { S.byId[p.id] = p; });
     S.bookings = data.bookings;
+    S.attendance = data.attendance || [];
+    S.marks = data.marks || [];
     if (!S.loaded) { S.loaded = true; S.weekStart = mondayOf(parse(data.today)); }
     setStatus("");
     render();
@@ -359,6 +441,33 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     });
   }
 
+  // ---------- render: needs an opponent ----------
+  // Provisional bookings past their deadline, plus those whose deadline is within 2 days.
+  function renderAttention() {
+    var el = $("attention");
+    if (!S.loaded) { el.hidden = true; return; }
+    var soon = nowMs() + 48 * HOUR;
+    var items = S.bookings.filter(function (b) {
+      var st = bstatus(b);
+      return st === "risk" || (st === "prov" && deadline(b) <= soon);
+    }).sort(function (a, b) { return deadline(a) - deadline(b); });
+    if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
+    var risky = items.filter(function (b) { return bstatus(b) === "risk"; }).length;
+    el.innerHTML = '<h2>Needs opponents</h2>' +
+      '<p class="hint">The club cancels provisional bookings that have no opponents ' + CFG.confirmHours + ' hours before they start.' +
+      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the opponents, mark it confirmed, or delete it.' : '') + '</p>' +
+      '<ul>' + items.map(function (b) {
+        var st = bstatus(b), dl = deadline(b);
+        var cls = st === "risk" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
+        return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
+          (st === "risk" ? '<span class="tag warn">Cancelled?</span>' : '<span class="tag">Prov</span>') +
+          '<span class="what">Court ' + b.court + ' · ' + short(parse(b.date)) + ' ' + b.start + ' · ' + esc(pname(b.bookerId)) + '</span>' +
+          '<span class="due">' + (st === "risk" ? "Deadline was " + when(dl) : "Name by " + when(dl) + " (" + untilText(dl) + ")") + '</span>' +
+          '</button></li>';
+      }).join("") + '</ul>';
+    el.hidden = false;
+  }
+
   // ---------- render: sessions ----------
   function renderSessions() {
     if (!S.loaded) { $("tally").textContent = ""; return; }
@@ -382,29 +491,29 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       function pct(m) { return ((m - a0) / span * 100).toFixed(3) + "%"; }
 
       var tickStep = span > 210 ? 60 : 30, ticks = [];
-      var first = Math.ceil(a0 / tickStep) * tickStep;
-      for (var t = first; t <= a1; t += tickStep) {
+      for (var t = Math.ceil(a0 / tickStep) * tickStep; t <= a1; t += tickStep) {
         var cls = t === a0 ? "first" : t === a1 ? "last" : "";
         ticks.push('<span class="' + cls + '" style="left:' + pct(t) + '">' + hm(t) + '</span>');
       }
 
-      var n = { full: 0, part: 0, free: 0, prov: 0, lapsed: 0 }, rows = [];
+      var n = { full: 0, part: 0, free: 0, prov: 0, risk: 0 }, rows = [];
       for (var c = 1; c <= CFG.courts; c++) {
         var list = courtBookings(date, c);
         var cov = coverage(list, s.start, s.end);
         n[cov]++;
         var blocks = list.map(function (x) {
-          var st = bstatus(x.b), b = x.b;
+          var b = x.b, st = bstatus(b);
           if (st === "prov") n.prov++;
-          if (st === "lapsed") n.lapsed++;
-          var who = esc(b.booker) + (b.opponent ? " v " + esc(b.opponent) : "");
-          var note = st === "prov" ? "Provisional: add an opponent by " + when(deadline(b))
-            : st === "lapsed" ? "Not confirmed by " + when(deadline(b)) + ", so the club will have cancelled it"
-            : st === "past" && !b.opponent ? "No opponent recorded" : "Confirmed";
-          var label = st === "prov" ? '<span class="tag">Prov</span> ' : st === "lapsed" ? '<span class="tag warn">Lapsed</span> ' : "";
-          return '<button class="blk' + (st === "prov" ? " prov" : st === "lapsed" ? " lapsed" : "") + '" data-id="' + esc(b.id) + '" style="left:calc(' + pct(x.s) + ' + 1px);width:calc(' + ((x.e - x.s) / span * 100).toFixed(3) + '% - 2px)"' +
-            ' title="' + who + ' · ' + b.start + '–' + b.end + ' · ' + esc(note) + '" aria-label="Court ' + c + ', ' + who + ', ' + b.start + ' to ' + b.end + '. ' + esc(note) + '">' +
-            label + '<span class="nm">' + who + '</span> <small>' + b.start + '–' + b.end + '</small></button>';
+          if (st === "risk") n.risk++;
+          var note = st === "prov" ? "Provisional: name opponents by " + when(deadline(b))
+            : st === "risk" ? "May have been cancelled: no opponents by " + when(deadline(b))
+            : st === "past" ? "Was provisional" : "Confirmed";
+          var label = st === "prov" ? '<span class="tag">Prov</span> ' : st === "risk" ? '<span class="tag warn">Cancelled?</span> ' : "";
+          var desc = teamFull(b) + " · " + b.start + "–" + b.end + " · " + note;
+          return '<button class="blk' + (st === "prov" || st === "past" ? " prov" : st === "risk" ? " risk" : "") + '" data-id="' + esc(b.id) + '"' +
+            ' style="left:calc(' + pct(x.s) + ' + 1px);width:calc(' + ((x.e - x.s) / span * 100).toFixed(3) + '% - 2px)"' +
+            ' title="' + esc(desc) + '" aria-label="Court ' + c + ', ' + esc(desc) + '">' +
+            label + '<span class="nm">' + esc(teamText(b)) + '</span> <small>' + b.start + '–' + b.end + '</small></button>';
         }).join("");
         rows.push('<div class="row"><span class="num ' + cov + '" title="' + (cov === "full" ? "Covered" : cov === "part" ? "Partly covered" : "Not booked") + '">' + c + '</span>' +
           '<div class="lane' + (locked ? ' locked' : '') + '" data-date="' + date + '" data-court="' + c + '" data-a0="' + a0 + '" data-span="' + span + '">' +
@@ -426,61 +535,97 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         '<span class="key"><i class="k-part"></i><b>' + n.part + '</b> partly</span>' +
         '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span>' +
         (n.prov ? '<span class="key"><i class="k-prov"></i><b>' + n.prov + '</b> provisional</span>' : '') +
-        (n.lapsed ? '<span class="key"><i class="k-lapsed"></i><b>' + n.lapsed + '</b> lapsed</span>' : '') + '</span></div>' +
+        (n.risk ? '<span class="key"><i class="k-risk"></i><b>' + n.risk + '</b> may be cancelled</span>' : '') + '</span></div>' +
         (locked ? '<div class="lockednote">Bookings for this session open on ' + short(addDays(d, -CFG.bookAheadDays)) + '.</div>' : '') +
-        '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div></article>';
+        '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div>' +
+        (locked ? '' : renderAttendance(date)) + '</article>';
     }).join("");
     $("tally").textContent = totalFull + " of " + totalCourts + " courts fully covered";
   }
 
-  // ---------- render: needs an opponent ----------
-  // Every upcoming provisional booking whose deadline is within 2 days, plus any that have lapsed.
-  function renderAttention() {
-    var el = $("attention");
-    if (!S.loaded) { el.hidden = true; return; }
-    var soon = nowMs() + 48 * HOUR;
-    var items = S.bookings.filter(function (b) {
-      var st = bstatus(b);
-      return st === "lapsed" || (st === "prov" && deadline(b) <= soon);
-    }).sort(function (a, b) { return deadline(a) - deadline(b); });
-    if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
-    var lapsed = items.filter(function (b) { return bstatus(b) === "lapsed"; }).length;
-    el.innerHTML = '<h2>Needs an opponent</h2>' +
-      '<p class="hint">Bookings without an opponent are cancelled by the club ' + CFG.confirmHours + ' hours before they start.' +
-      (lapsed ? ' Lapsed ones are past that point: check the club system, then add the opponent or delete the booking.' : '') + '</p>' +
-      '<ul>' + items.map(function (b) {
-        var st = bstatus(b), dl = deadline(b);
-        var cls = st === "lapsed" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
-        return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
-          (st === "lapsed" ? '<span class="tag warn">Lapsed</span>' : '<span class="tag">Prov</span>') +
-          '<span class="what">Court ' + b.court + ' · ' + short(parse(b.date)) + ' ' + b.start + ' · ' + esc(b.booker) + '</span>' +
-          '<span class="due">' + (st === "lapsed" ? "Deadline was " + when(dl) : "Add by " + when(dl) + " (" + untilText(dl) + ")") + '</span>' +
-          '</button></li>';
-      }).join("") + '</ul>';
-    el.hidden = false;
+  function renderAttendance(date) {
+    var list = sessionPlayers(date);
+    var n = { Attended: 0, "No-show": 0, none: 0 };
+    list.forEach(function (p) { n[p.status || "none"]++; });
+    var sum = list.length
+      ? plural(list.length, "player") + " · " + n.Attended + " attended" +
+        (n["No-show"] ? ' · <span class="bad">' + n["No-show"] + " no-show</span>" : "") +
+        (n.none ? " · " + n.none + " not checked" : "")
+      : "No players yet";
+    var rows = list.map(function (p) {
+      var nm = esc(pname(p.id));
+      var role = p.roles.length ? p.roles.map(esc).join("<br>") : p.added ? "Added to this session" : "Not on a booking";
+      if (p.status === "No-show" && p.onBooking) role += ' · <span class="mark">black mark</span>';
+      return '<li class="att-row"><div class="att-who"><span class="att-name">' + nm + '</span><span class="att-role">' + role + '</span></div>' +
+        '<div class="seg" role="group" aria-label="Attendance for ' + nm + '">' +
+        '<button type="button" class="yes" aria-pressed="' + (p.status === "Attended") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="Attended">Attended</button>' +
+        '<button type="button" class="no" aria-pressed="' + (p.status === "No-show") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="No-show">No-show</button></div>' +
+        (p.onBooking ? '' : '<button type="button" class="x" data-act="att-remove" data-date="' + date + '" data-pid="' + esc(p.id) + '" aria-label="Remove ' + nm + ' from this session">×</button>') +
+        '</li>';
+    }).join("");
+    var listed = {}; list.forEach(function (p) { listed[p.id] = true; });
+    var others = S.players.filter(function (p) { return !listed[p.id]; });
+    return '<details class="att" data-att="' + date + '"' + (S.openAtt[date] ? ' open' : '') + '>' +
+      '<summary><span class="att-title">Attendance</span><span class="att-sum">' + sum + '</span></summary><div class="att-body">' +
+      (list.length ? '<ul class="att-list">' + rows + '</ul>' : '<p class="empty">No one is named on a booking for this session yet.</p>') +
+      '<div class="att-foot"><select id="addatt-' + date + '" aria-label="Add a player who came to this session">' +
+      '<option value="">Add a player who came…</option>' + others.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("") + '</select>' +
+      '<button type="button" class="btn" data-act="att-add" data-date="' + date + '">Add</button>' +
+      (n.none ? '<button type="button" class="btn" data-act="att-all" data-date="' + date + '">Mark the rest attended</button>' : '') +
+      '</div></div></details>';
   }
 
-  // ---------- render: bookers ----------
-  function renderBookers() {
+  function setAtt(date, entries, msg) {
+    entries.forEach(function (e) {
+      S.attendance = S.attendance.filter(function (a) { return !(a.date === date && a.playerId === e.playerId); });
+      if (!e.remove && (e.status || e.added)) S.attendance.push({ date: date, playerId: e.playerId, status: e.status || "", added: !!e.added });
+    });
+    renderSessions();
+    write("setAttendance", { date: date, entries: entries }, msg);
+  }
+
+  // ---------- render: players ----------
+  function renderPlayers() {
     var todayStr = S.today || ymd(new Date());
-    var counts = {};
-    S.bookings.forEach(function (b) { if (b.date >= todayStr) counts[b.booker] = (counts[b.booker] || 0) + 1; });
-    if (!S.bookers.length) {
-      $("people").innerHTML = '<li><p class="empty">' + (S.loaded ? 'No bookers yet. Add the first name above.' : 'Loading…') + '</p></li>';
-      return;
-    }
-    $("people").innerHTML = S.bookers.map(function (name, i) {
-      var n = counts[name] || 0;
-      var right = S.confirmRemove === name
-        ? '<span class="confirm">Remove' + (n ? ' (their ' + n + ' upcoming booking' + (n === 1 ? '' : 's') + ' stay on the board)' : '') + '?</span>' +
-          '<button class="btn danger" data-act="remove-yes" data-i="' + i + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
-        : '<button class="btn danger" data-act="remove" data-i="' + i + '">Remove</button>';
-      return '<li><span class="name">' + esc(name) + '</span><span class="stat">' + n + ' upcoming</span>' + right + '</li>';
+    var upcoming = {}, marks = {};
+    S.bookings.forEach(function (b) {
+      if (b.date < todayStr) return;
+      [b.bookerId].concat(b.opponentIds).forEach(function (pid) { upcoming[pid] = (upcoming[pid] || 0) + 1; });
+    });
+    S.marks.forEach(function (m) { marks[m.playerId] = (marks[m.playerId] || 0) + 1; });
+
+    $("marks").innerHTML = '<div><h2>Black marks</h2><p class="sub">No-shows by players named on a booking, over the last 12 months. Record them in each session’s attendance.</p></div>' +
+      (S.marks.length ? '<ul class="marks">' + S.marks.map(function (m) {
+        return '<li><b>' + esc(pname(m.playerId)) + '</b><span class="meta">' + short(parse(m.date)) + ' · Court ' + m.court + ' ' + m.start + '–' + m.end + ' · ' + m.role + '</span></li>';
+      }).join("") + '</ul>' : '<p class="empty">' + (S.loaded ? 'No black marks.' : 'Loading…') + '</p>');
+
+    var q = S.query.trim().toLowerCase();
+    var list = S.players.filter(function (p) { return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.id.toLowerCase() === q; });
+    if (!S.players.length) { $("people").innerHTML = '<li><p class="empty">' + (S.loaded ? 'No players yet. Add the first name above.' : 'Loading…') + '</p></li>'; return; }
+    if (!list.length) { $("people").innerHTML = '<li><p class="empty">No players match “' + esc(S.query) + '”.</p></li>'; return; }
+    $("people").innerHTML = list.map(function (p) {
+      var id = esc(p.id);
+      if (S.renaming === p.id) {
+        return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="New name for ' + esc(p.name) + '">' +
+          '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button></li>';
+      }
+      var mk = marks[p.id] || 0, up = upcoming[p.id] || 0;
+      var right = S.confirmRemove === p.id
+        ? '<span class="confirm">Remove ' + esc(p.name) + '?</span><button class="btn danger" data-act="remove-yes" data-id="' + id + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
+        : '<label class="toggle"><input type="checkbox" data-act="booker" data-id="' + id + '"' + (p.booker ? ' checked' : '') + '> Booker</label>' +
+          '<button class="btn" data-act="rename" data-id="' + id + '">Rename</button>' +
+          '<button class="btn danger" data-act="remove" data-id="' + id + '">Remove</button>';
+      return '<li><span class="who"><span class="name">' + esc(p.name) + '</span><span class="pid">' + id + '</span></span>' +
+        '<span class="stat">' + plural(up, "upcoming booking") + (mk ? ' · <span class="bad">' + plural(mk, "black mark") + '</span>' : '') + '</span>' + right + '</li>';
     }).join("");
   }
 
   // ---------- booking form ----------
-  // S.edit = {id?, date, court, start (min), minutes, booker, opponent}
+  // S.edit = {id?, date, court, start (min), minutes, bookerId, opponentIds: [3 slots], status, statusTouched, origStatus}
+  function defaultStatus(ed) {
+    if (ed.id) return ed.origStatus;
+    return localStart(ed.date, ed.start) - CFG.confirmHours * HOUR > nowMs() ? "Provisional" : "Confirmed";
+  }
   function openNew(date, court, startMin) {
     var s = SESSIONS[parse(date).getDay()];
     var list = courtBookings(date, court);
@@ -499,13 +644,16 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var room2 = Math.min(next, Math.max(s.end, start + minLen)) - start;
       CFG.lengths.forEach(function (l) { if (l <= room2) len = l; });
     }
-    S.edit = { id: null, date: date, court: court, start: start, minutes: len, booker: null, opponent: "" };
+    S.edit = { id: null, date: date, court: court, start: start, minutes: len, bookerId: "", opponentIds: ["", "", ""], statusTouched: false };
+    S.edit.status = defaultStatus(S.edit);
     renderSheet();
   }
   function openExisting(id) {
     var b = S.bookings.filter(function (x) { return x.id === id; })[0];
     if (!b) return;
-    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, booker: b.booker, opponent: b.opponent || "" };
+    var o = b.opponentIds.slice(0, 3); while (o.length < 3) o.push("");
+    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, bookerId: b.bookerId,
+      opponentIds: o, status: b.status, origStatus: b.status, statusTouched: false };
     renderSheet();
   }
   function startOptions(s, current) {
@@ -515,6 +663,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (current != null) opts[current] = true;
     return Object.keys(opts).map(Number).sort(function (a, b) { return a - b; });
   }
+  function chosenOpps(ed) { return ed.opponentIds.filter(Boolean); }
   // Returns an error message for the current form, or "".
   function problem(ed) {
     var s = SESSIONS[parse(ed.date).getDay()];
@@ -522,13 +671,13 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (en > 24 * 60) return "A booking can't run past midnight.";
     if (!(st < s.end && en > s.start)) return "This doesn't overlap the " + hm(s.start) + "–" + hm(s.end) + " session.";
     var clash = courtBookings(ed.date, ed.court, ed.id).filter(function (x) { return x.s < en && st < x.e; })[0];
-    if (clash) return "Clashes with " + clash.b.booker + " " + clash.b.start + "–" + clash.b.end + ".";
-    if (!ed.opponent.trim()) {
-      var at = localStart(ed.date, st);
-      if (at > nowMs() && nowMs() >= at - CFG.confirmHours * HOUR) {
-        return "This booking starts within " + CFG.confirmHours + " hours, so it needs an opponent. The club cancels unconfirmed bookings " + CFG.confirmHours + " hours before.";
-      }
+    if (clash) return "Clashes with " + pname(clash.b.bookerId) + " " + clash.b.start + "–" + clash.b.end + ".";
+    var opps = chosenOpps(ed);
+    for (var i = 0; i < opps.length; i++) {
+      if (opps.indexOf(opps[i]) !== i) return pname(opps[i]) + " is picked twice.";
+      if (ed.bookerId && opps[i] === ed.bookerId) return pname(opps[i]) + " booked the court, so can't also be an opponent.";
     }
+    if (opps.length === 2) return "Pick 1 opponent for singles or 3 for doubles.";
     return "";
   }
   function renderResult() {
@@ -538,58 +687,68 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (ed.start < s.start) notes.push("starts before the session");
     if (en > s.end) notes.push("runs past the session");
     el.className = "result" + (p ? " bad" : "");
-    if (p) { el.innerHTML = esc(p); }
-    else {
-      var at = localStart(ed.date, ed.start), state;
-      if (ed.opponent.trim()) state = '<span class="state">Confirmed</span>';
-      else if (at <= nowMs()) state = '<span class="state">No opponent recorded</span>';
-      else state = '<span class="state prov">Provisional · add an opponent by ' + when(at - CFG.confirmHours * HOUR) + '</span>';
-      el.innerHTML = hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '') + state;
-    }
+    el.innerHTML = p ? esc(p) : hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '');
     $("save").disabled = !!p;
+
+    // Status: confirmed once opponents are named; otherwise the admin can choose.
+    var opps = chosenOpps(ed).length, box = $("statusfield"), hint = $("statushint");
+    if (!ed.statusTouched && !ed.id) ed.status = defaultStatus(ed);
+    box.hidden = opps > 0;
+    $("st-Provisional").checked = ed.status === "Provisional";
+    $("st-Confirmed").checked = ed.status === "Confirmed";
+    var at = localStart(ed.date, ed.start), dl = at - CFG.confirmHours * HOUR;
+    if (opps) hint.textContent = "Confirmed: opponents named.";
+    else if (ed.status === "Confirmed") hint.textContent = ed.id ? "Confirmed without opponents." : dl <= nowMs() ? "Made inside " + CFG.confirmHours + " hours of the booking, so it starts as confirmed." : "Confirmed without opponents.";
+    else if (at <= nowMs()) hint.textContent = "This booking has started.";
+    else if (dl <= nowMs()) hint.textContent = "Past the " + when(dl) + " deadline: the club may have cancelled it. Check the club system.";
+    else hint.textContent = "Name opponents by " + when(dl) + ", or the club cancels it.";
+    $("statushint-wrap").hidden = false;
   }
-  // Names already used as opponents, for type-ahead.
-  function knownOpponents() {
-    var seen = {}, out = [];
-    S.bookings.forEach(function (b) {
-      var k = (b.opponent || "").toLowerCase();
-      if (k && !seen[k]) { seen[k] = true; out.push(b.opponent); }
-    });
-    return out.sort(function (a, b) { return a.localeCompare(b); });
+  function playerOptions(selected, blank) {
+    var opts = S.players.slice();
+    if (selected && !S.byId[selected]) opts.unshift({ id: selected, name: "Unknown player (" + selected + ")" });
+    return '<option value="">' + blank + '</option>' + opts.map(function (p) {
+      return '<option value="' + esc(p.id) + '"' + (p.id === selected ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+    }).join("");
   }
   function renderSheet() {
     var w = $("sheetwrap");
     if (!S.edit) { w.hidden = true; w.innerHTML = ""; return; }
     var ed = S.edit, d = parse(ed.date), s = SESSIONS[d.getDay()];
     var others = courtBookings(ed.date, ed.court, ed.id);
-    var who = S.bookers.slice();
-    if (ed.booker && who.indexOf(ed.booker) === -1) who.unshift(ed.booker); // removed booker on an old booking
-    var picker = who.length
-      ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + who.map(function (name, i) {
-          return '<label><input type="radio" name="who" id="who-' + i + '" value="' + esc(name) + '"' + (ed.booker === name ? ' checked' : '') + '><span>' + esc(name) + '</span></label>';
+    var bookers = S.players.filter(function (p) { return p.booker; });
+    if (ed.bookerId && !bookers.some(function (p) { return p.id === ed.bookerId; })) bookers.unshift({ id: ed.bookerId, name: pname(ed.bookerId) });
+    var picker = bookers.length
+      ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + bookers.map(function (p) {
+          return '<label><input type="radio" name="who" value="' + esc(p.id) + '"' + (ed.bookerId === p.id ? ' checked' : '') + '><span>' + esc(p.name) + '</span></label>';
         }).join("") + '</div>'
-      : '<p class="empty">No bookers yet. <button class="linklike" data-act="go-bookers">Add bookers</button> first.</p>';
+      : '<p class="empty">No bookers yet. <button type="button" class="linklike" data-act="go-players">Tick Booker on the Players list</button> first.</p>';
     var starts = startOptions(s, ed.start).map(function (t) {
       return '<option value="' + t + '"' + (t === ed.start ? ' selected' : '') + '>' + hm(t) + '</option>';
     }).join("");
     var lens = CFG.lengths.slice();
     if (lens.indexOf(ed.minutes) === -1) lens.push(ed.minutes);
     var lenPicker = lens.map(function (l) {
-      return '<label><input type="radio" name="len" id="len-' + l + '" value="' + l + '"' + (l === ed.minutes ? ' checked' : '') + '><span>' + l + ' min</span></label>';
+      return '<label><input type="radio" name="len" value="' + l + '"' + (l === ed.minutes ? ' checked' : '') + '><span>' + l + ' min</span></label>';
+    }).join("");
+    var opps = [0, 1, 2].map(function (i) {
+      return '<select id="opp-' + i + '" data-slot="' + i + '" aria-label="Opponent ' + (i + 1) + '">' + playerOptions(ed.opponentIds[i], "Opponent " + (i + 1)) + '</select>';
     }).join("");
 
     w.innerHTML = '<div class="scrim" data-act="close"><form class="sheet" id="bookform" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
       '<div><h3 id="sheet-title">' + (ed.id ? 'Court ' + ed.court + ' booking' : 'Book court ' + ed.court) + '</h3>' +
       '<div class="when">' + short(d) + ' · session ' + hm(s.start) + '–' + hm(s.end) + '</div></div>' +
       (others.length ? '<div class="field"><span class="flabel">Also on court ' + ed.court + '</span><ul class="others">' + others.map(function (x) {
-        return '<li>' + x.b.start + '–' + x.b.end + ' · ' + esc(x.b.booker) + (x.b.opponent ? ' v ' + esc(x.b.opponent) : ' (provisional)') + '</li>'; }).join("") + '</ul></div>' : '') +
+        return '<li>' + x.b.start + '–' + x.b.end + ' · ' + esc(teamText(x.b)) + (x.b.status === "Provisional" ? ' (provisional)' : '') + '</li>'; }).join("") + '</ul></div>' : '') +
       '<div class="field"><span class="flabel">Booked by</span>' + picker + '</div>' +
       '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
       '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
-      '<div class="field"><label class="flabel" for="opp">Opponent</label>' +
-      '<input type="text" id="opp" list="opplist" maxlength="40" autocomplete="off" placeholder="Member name" value="' + esc(ed.opponent) + '">' +
-      '<datalist id="opplist">' + knownOpponents().map(function (o) { return '<option value="' + esc(o) + '">'; }).join("") + '</datalist>' +
-      '<p class="hint">Leave blank to save as provisional. You must add one at least ' + CFG.confirmHours + ' hours before the booking, or the club cancels it.</p></div>' +
+      '<div class="field"><span class="flabel">Opponents</span><div class="opps">' + opps + '</div>' +
+      '<p class="hint">Pick 1 for singles or 3 for doubles, from the Players list. Missing someone? Add them on the Players tab.</p></div>' +
+      '<div class="field statusbox"><div id="statusfield"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' +
+      '<label><input type="radio" name="status" id="st-Provisional" value="Provisional"><span>Provisional</span></label>' +
+      '<label><input type="radio" name="status" id="st-Confirmed" value="Confirmed"><span>Confirmed</span></label></div></div>' +
+      '<div id="statushint-wrap"><p class="hint" id="statushint"></p></div></div>' +
       '<div id="result" class="result" aria-live="polite"></div>' +
       '<div class="actions">' + (ed.id ? '<button type="button" class="btn danger" data-act="delete">Delete booking</button>' : '') +
       '<span class="spacer"></span><button type="button" class="btn" data-act="close">Cancel</button>' +
@@ -602,18 +761,18 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
   function saveBooking() {
     var ed = S.edit; if (!ed) return;
-    var sel = document.querySelector('input[name="who"]:checked');
-    if (!sel) { toast("Pick who booked the court."); return; }
-    ed.booker = sel.value;
-    ed.opponent = ($("opp") ? $("opp").value : ed.opponent).trim().replace(/\s+/g, " ");
+    if (!ed.bookerId) { toast("Pick who booked the court."); return; }
     var p = problem(ed); if (p) { toast(p); return; }
-    var payload = { id: ed.id || "", date: ed.date, court: ed.court, start: hm(ed.start), minutes: ed.minutes, booker: ed.booker, opponent: ed.opponent };
+    var opps = chosenOpps(ed);
+    var status = opps.length ? "Confirmed" : ed.status;
+    var payload = { id: ed.id || "", date: ed.date, court: ed.court, start: hm(ed.start), minutes: ed.minutes,
+      bookerId: ed.bookerId, opponentIds: opps, status: status };
     // Show it straight away; the server's answer replaces this.
     var local = { id: ed.id || ("tmp" + Date.now()), date: ed.date, court: ed.court, start: payload.start, end: hm(ed.start + ed.minutes),
-      minutes: ed.minutes, booker: ed.booker, opponent: ed.opponent, startsAt: localStart(ed.date, ed.start) };
+      minutes: ed.minutes, status: status, bookerId: ed.bookerId, opponentIds: opps, startsAt: localStart(ed.date, ed.start) };
     S.bookings = S.bookings.filter(function (b) { return b.id !== ed.id; }).concat([local]);
     S.edit = null; renderSheet(); renderAttention(); renderSessions();
-    write("saveBooking", payload, "Court " + payload.court + " " + payload.start + "–" + local.end + " saved" + (ed.opponent ? "" : " as provisional"));
+    write("saveBooking", payload, "Court " + payload.court + " " + payload.start + "–" + local.end + " saved" + (status === "Provisional" ? " as provisional" : ""));
   }
   function deleteBooking() {
     var ed = S.edit; if (!ed || !ed.id) return;
@@ -624,11 +783,11 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
   function render() {
     $("view-sessions").hidden = S.tab !== "sessions";
-    $("view-bookers").hidden = S.tab !== "bookers";
+    $("view-players").hidden = S.tab !== "players";
     document.querySelectorAll(".tabs button").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)); });
     renderAttention();
     renderSessions();
-    renderBookers();
+    renderPlayers();
   }
 
   // ---------- events ----------
@@ -650,52 +809,88 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       return;
     }
     var act = e.target.closest("[data-act]");
-    if (!act) return;
-    var a = act.dataset.act;
+    if (!act || act.tagName === "INPUT") return;
+    var a = act.dataset.act, date = act.dataset.date, pid = act.dataset.pid, id = act.dataset.id;
     if (a === "close") { if (e.target === act || act.tagName === "BUTTON") { S.edit = null; renderSheet(); } return; }
     if (a === "delete") deleteBooking();
-    else if (a === "go-bookers") { S.edit = null; renderSheet(); S.tab = "bookers"; render(); $("newname").focus(); }
-    else if (a === "remove") { S.confirmRemove = S.bookers[Number(act.dataset.i)]; renderBookers(); }
-    else if (a === "remove-no") { S.confirmRemove = null; renderBookers(); }
-    else if (a === "remove-yes") {
-      var name = S.bookers[Number(act.dataset.i)]; S.confirmRemove = null;
-      write("removeBooker", name, name + " removed");
+    else if (a === "go-players") { S.edit = null; renderSheet(); S.tab = "players"; render(); }
+    else if (a === "att-set") {
+      var cur = attRow(date, pid), st = act.dataset.st;
+      var next = cur && cur.status === st ? "" : st;
+      setAtt(date, [{ playerId: pid, status: next, added: cur ? cur.added : false }]);
     }
+    else if (a === "att-remove") setAtt(date, [{ playerId: pid, remove: true }], pname(pid) + " removed from the session");
+    else if (a === "att-add") {
+      var sel = $("addatt-" + date);
+      if (!sel || !sel.value) { toast("Pick a player to add."); return; }
+      setAtt(date, [{ playerId: sel.value, status: "Attended", added: true }], pname(sel.value) + " added as attended");
+    }
+    else if (a === "att-all") {
+      var rest = sessionPlayers(date).filter(function (p) { return !p.status; });
+      setAtt(date, rest.map(function (p) { return { playerId: p.id, status: "Attended", added: p.added }; }), plural(rest.length, "player") + " marked attended");
+    }
+    else if (a === "rename") { S.renaming = id; S.confirmRemove = null; renderPlayers(); var inp = $("rename-" + id); if (inp) { inp.focus(); inp.select(); } }
+    else if (a === "rename-cancel") { S.renaming = null; renderPlayers(); }
+    else if (a === "rename-save") {
+      var name = ($("rename-" + id).value || "").trim().replace(/\s+/g, " ");
+      S.renaming = null;
+      if (name && name !== pname(id)) write("updatePlayer", { id: id, name: name }, "Renamed to " + name);
+      else renderPlayers();
+    }
+    else if (a === "remove") { S.confirmRemove = id; S.renaming = null; renderPlayers(); }
+    else if (a === "remove-no") { S.confirmRemove = null; renderPlayers(); }
+    else if (a === "remove-yes") { var nm = pname(id); S.confirmRemove = null; write("removePlayer", id, nm + " removed"); }
   });
   document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.dataset && t.dataset.act === "booker") {
+      var p = S.byId[t.dataset.id]; if (p) p.booker = t.checked;
+      write("updatePlayer", { id: t.dataset.id, booker: t.checked }, pname(t.dataset.id) + (t.checked ? " can now book courts" : " is no longer a booker"));
+      return;
+    }
     if (!S.edit) return;
-    if (e.target.id === "start") { S.edit.start = Number(e.target.value); renderResult(); }
-    else if (e.target.name === "len") { S.edit.minutes = Number(e.target.value); renderResult(); }
-    else if (e.target.name === "who") { S.edit.booker = e.target.value; }
+    if (t.id === "start") { S.edit.start = Number(t.value); renderResult(); }
+    else if (t.name === "len") { S.edit.minutes = Number(t.value); renderResult(); }
+    else if (t.name === "who") { S.edit.bookerId = t.value; renderResult(); }
+    else if (t.name === "status") { S.edit.status = t.value; S.edit.statusTouched = true; renderResult(); }
+    else if (t.dataset && t.dataset.slot != null) { S.edit.opponentIds[Number(t.dataset.slot)] = t.value; renderResult(); }
   });
-  document.addEventListener("input", function (e) {
-    if (S.edit && e.target.id === "opp") { S.edit.opponent = e.target.value; renderResult(); }
-  });
+  document.addEventListener("toggle", function (e) {
+    var el = e.target;
+    if (el.classList && el.classList.contains("att")) S.openAtt[el.dataset.att] = el.open;
+  }, true);
   document.addEventListener("submit", function (e) {
     e.preventDefault();
     if (e.target.id === "bookform") saveBooking();
   });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.edit) { S.edit = null; renderSheet(); } });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && S.edit) { S.edit = null; renderSheet(); }
+    if (e.key === "Enter" && e.target.id && e.target.id.indexOf("rename-") === 0) {
+      e.preventDefault(); var btn = document.querySelector('[data-act="rename-save"]'); if (btn) btn.click();
+    }
+  });
 
   $("prev").onclick = function () { S.weekStart = addDays(S.weekStart, -7); renderSessions(); };
   $("next").onclick = function () { S.weekStart = addDays(S.weekStart, 7); renderSessions(); };
   $("thisweek").onclick = function () { S.weekStart = mondayOf(todayDate()); renderSessions(); };
+  $("pquery").addEventListener("input", function (e) { S.query = e.target.value; renderPlayers(); });
 
   $("addform").addEventListener("submit", function (e) {
     e.preventDefault(); e.stopPropagation();
     var input = $("newname"), name = input.value.trim().replace(/\s+/g, " ");
     if (!name) return;
-    if (S.bookers.some(function (p) { return p.toLowerCase() === name.toLowerCase(); })) { toast(name + " is already on the list"); return; }
-    input.value = "";
-    write("addBooker", name, name + " added");
+    if (S.players.some(function (p) { return p.name.toLowerCase() === name.toLowerCase(); })) { toast(name + " is already on the list"); return; }
+    var booker = $("newbooker").checked;
+    input.value = ""; $("newbooker").checked = false;
+    write("addPlayer", { name: name, booker: booker }, name + " added");
   });
 
   // ---------- start ----------
   render();
   load();
-  // Pick up other admins' changes every 30 seconds while the page is open.
-  setInterval(function () { if (!document.hidden && !S.busy && !S.edit) load(); }, 30000);
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && !S.busy) load(); });
+  // Pick up other admins' changes every 30 seconds while the page is open (not while typing a rename).
+  setInterval(function () { if (!document.hidden && !S.busy && !S.edit && !S.renaming) load(); }, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && !S.busy && !S.renaming) load(); });
 })();
 </script>
 </body>

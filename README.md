@@ -1,6 +1,6 @@
 # Breakfast Tennis court bookings — setup
 
-A small web app for the admin team to record court bookings for Breakfast Tennis sessions. Each session shows one lane per court on a time axis, with the published session times marked, so it's easy to see which courts are covered for the whole session, partly covered, or free. Data is stored in a Google Sheet; the page is served by Google Apps Script.
+A small web app for the admin team to record court bookings and attendance for Breakfast Tennis sessions. Each session shows one lane per court on a time axis, with the published session times marked, so it's easy to see which courts are covered for the whole session, partly covered, or free. Data is stored in a Google Sheet; the page is served by Google Apps Script.
 
 Bookings are individual time slots: a court can have several in one session (for example 06:00–07:00 and 07:00–08:30), and a booking may start before or finish after the session's published times, as long as it overlaps the session.
 
@@ -12,12 +12,12 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ## Setup (about 10 minutes)
 
-1. Create a new Google Sheet (or open your existing tracker). The app adds three tabs, **Settings**, **Bookings** and **Bookers**, and never touches other tabs.
+1. Create a new Google Sheet (or open your existing tracker). The app adds four tabs, **Settings**, **Players**, **Bookings** and **Attendance**, and never touches other tabs.
 2. In the sheet: **Extensions → Apps Script**.
 3. Replace the contents of `Code.gs` with this `Code.gs`.
 4. Click **+ → HTML**, name it `Index` (exactly), and paste in `Index.html`.
 5. **Project Settings (gear) → tick "Show appsscript.json manifest file in editor"**, then paste in `appsscript.json`.
-6. Back in the editor, choose the `setup` function and click **Run**. Approve the permissions. This creates the three tabs.
+6. Back in the editor, choose the `setup` function and click **Run**. Approve the permissions. This creates the tabs.
 7. **Deploy → New deployment → Web app**. Check it shows *Execute as: User accessing the web app* and *Who has access: Anyone with a Google account*. Click **Deploy** and copy the web app URL.
 8. Share the **Google Sheet** with each admin as an **Editor**. Send them the web app URL.
 
@@ -28,13 +28,29 @@ Bookings are individual time slots: a court can have several in one session (for
 - The form shows the finish time, notes when a booking starts before or runs past the session, and won't save if it clashes with another booking on that court.
 - Court numbers are coloured by coverage of the published session: green = covered, yellow = partly, dashed = free.
 
-### Opponents and provisional bookings
+### Players
 
-- Each booking has an optional **Opponent** (the member declared against the court). Names typed before are suggested as you type.
-- A booking with no opponent is **provisional**. It's shown hatched with a "Prov" tag and a "confirm by" deadline.
-- Provisional bookings are only allowed until 72 hours before the booking starts (set by **Confirm opponent (hours before)** in Settings). Within that window, the form and the server both refuse to save a booking without an opponent.
-- A provisional booking still without an opponent at the deadline is shown as **Lapsed** (struck through, orange), because the club will have cancelled it. Lapsed bookings don't count towards court coverage. Check the club system, then add the opponent or delete the booking.
-- The **Needs an opponent** list at the top of the Sessions view shows lapsed bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
+The **Players** view lists everyone who books courts, plays as an opponent or comes to sessions. Each player has a fixed ID (P0001, P0002 …) that bookings and attendance use, so renaming a player updates them everywhere.
+
+- **Booker**: tick for the people who book courts. Only bookers appear under "Booked by" in the booking form.
+- **Rename** and **Remove**: a player who is on a booking or an attendance record can't be removed; untick Booker instead.
+- Names must be unique; add an initial to tell two people apart.
+
+### Opponents and booking status
+
+- Each booking has **1 opponent** (singles) or **3** (doubles), picked from the Players list. Add new people on the Players view first.
+- A booking with opponents is **Confirmed**.
+- A booking without opponents made **more than 72 hours ahead** starts as **Provisional** (hatched, "Prov" tag), with the deadline for naming opponents. One made **inside 72 hours** starts as **Confirmed**. The 72 comes from **Confirm opponent (hours before)** in Settings.
+- When there are no opponents you can switch the status between Provisional and Confirmed yourself, for example once you've checked the club system.
+- A provisional booking still without opponents at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the opponents, mark it confirmed, or delete it.
+- The **Needs opponents** list at the top of the Sessions view shows "Cancelled?" bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
+
+### Attendance and black marks
+
+- Each session has an **Attendance** section (tap to open). It lists everyone named on that session's bookings, as booker or opponent.
+- Mark each person **Attended** or **No-show**; tap again to clear. **Mark the rest attended** fills in everyone not yet checked.
+- **Add a player who came** adds someone from the Players list who wasn't on a booking; they're marked attended. Remove them with ×.
+- A **No-show** by someone named on a booking is a **black mark**: one per booking they were on that session. The Players view lists black marks from the last 12 months, and shows each player's count.
 
 ## Settings tab
 
@@ -84,16 +100,29 @@ The message under the title names the Google account the app is running as, and 
 
 After editing, use **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
 
-If you set up an earlier version of this app, its **Bookings** tab has a different layout. Rename or delete that tab and reload; the app creates a new one. An older **Settings** tab keeps working (its "Late finish" column is ignored, and booking lengths and start step use the defaults until you add those rows).
+### Upgrading from the version with a Bookers tab
+
+The first time anyone loads the new version, the sheet is converted automatically:
+
+- Everyone on the **Bookers** tab becomes a player with Booker ticked, and every opponent name on existing bookings becomes a player.
+- The **Bookings** tab is rebuilt in the new layout. The old one is kept as **Bookings (before players)**. Bookings that had an opponent become Confirmed; those without become Provisional.
+- The old **Bookers** tab is no longer used. Delete it, and the backup, once you're happy.
+
+An older **Settings** tab keeps working.
 
 ## Editing the sheet by hand
 
-The **Bookings** tab columns are: Date | Court | Start | Finish | Minutes | Booker | Updated | Updated by | ID | Opponent. (The Opponent heading is added automatically to existing tabs.)
+**Players**: ID | Name | Booker. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers.
+
+**Bookings**: Date | Court | Start | Finish | Minutes | Status | Booker | Opponents | Booker name | Opponent names | Updated | Updated by | ID
 
 - Date as `yyyy-mm-dd` (e.g. `2026-11-11`) or `dd/mm/yyyy`; Court as a number; Start as `hh:mm`.
 - Fill in either **Minutes** or **Finish**; the app works out the other.
+- **Status** is `Provisional` or `Confirmed`.
+- **Booker** and **Opponents** hold player IDs (opponents separated by commas). On a row you add by hand you can leave them blank and type names under **Booker name** / **Opponent names** instead; they're matched to the Players list.
 - Leave **ID** blank on rows you add; the app fills it in.
-- Booker names should match a name on the **Bookers** tab.
+
+**Attendance**: Date | Player | Status | Added | Name | Updated | Updated by. Status is `Attended` or `No-show`; Added is `Yes` for players who weren't on a booking.
 
 ## Deployments
 
