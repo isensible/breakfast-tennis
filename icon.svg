@@ -5,16 +5,15 @@
       <stop offset="0.5" stop-color="#cde21a"/>
       <stop offset="1" stop-color="#93ab0a"/>
     </radialGradient>
-    <clipPath id="ball"><circle cx="33" cy="31" r="17.5"/></clipPath>
+    <clipPath id="ball"><circle cx="33" cy="31" r="16.2"/></clipPath>
   </defs>
   <!-- egg white -->
   <path d="M30 4.5c7.5-.8 12.6 3.4 17.4 6.6 5.6 3.7 12.4 6.2 12.6 14.2.2 7-4.6 10.6-5.4 16.4-.9 6.3-3.6 13.6-12.4 16.4-8.2 2.6-14.4-1.4-20.6-3.3C15.4 53 7 51.6 4.6 43.1 2.4 35.4 7.4 30.6 7.8 23.8 8.3 15.4 13.2 6.6 30 4.5z"
         fill="#ffffff" stroke="#d9ded6" stroke-width="1.5"/>
   <!-- tennis-ball yolk -->
-  <circle cx="33" cy="31" r="17.5" fill="url(#yolk)"/>
+  <circle cx="33" cy="31" r="16.2" fill="url(#yolk)"/>
   <g clip-path="url(#ball)" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round">
-    <path d="M18.6 16.3c7.2 5.2 8.5 23.6.5 30.4"/>
-    <path d="M47.4 15.4c-8 6.2-6.8 24.6.5 30.4"/>
+    <path d="M19.7 17.4c6.7 4.8 7.9 21.9.5 28.2"/>
+    <path d="M46.3 16.6c-7.4 5.7-6.3 22.8.5 28.2"/>
   </g>
-  <circle cx="33" cy="31" r="17.5" fill="none" stroke="#6f8306" stroke-opacity=".7" stroke-width="1.6"/>
 </svg>
