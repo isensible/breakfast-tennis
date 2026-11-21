@@ -100,7 +100,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 }
 .blk small { font-weight: 500; opacity: .85; font-variant-numeric: tabular-nums; }
 .blk:hover { filter: brightness(1.08); }
-/* Provisional: holding the court, no opponent yet. Hatched outline so it reads as "pencilled in". */
+/* Provisional: holding the court, no players named yet. Hatched outline so it reads as "pencilled in". */
 .blk.prov {
   background-color: var(--surface); color: var(--court); box-shadow: inset 0 0 0 1.5px var(--court);
   background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--court-soft) 5px 10px);
@@ -111,7 +111,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .key .k-prov { box-shadow: inset 0 0 0 1.5px var(--court); background: repeating-linear-gradient(135deg, transparent 0 2px, var(--court-soft) 2px 4px); }
 .key .k-risk { background: var(--warn-soft); box-shadow: inset 0 0 0 1.5px var(--warn); }
 
-/* Needs-an-opponent list */
+/* Needs-players list */
 .attention { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; display: grid; gap: 8px; }
 .attention h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.2rem; letter-spacing: .01em; }
 .attention ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -180,7 +180,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .toggle input { width: 17px; height: 17px; accent-color: var(--court); margin: 0; }
 .statusbox { display: grid; gap: 6px; }
 
-/* Opponent pickers */
+/* Player pickers in the booking form */
 .opps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 460px) { .opps { grid-template-columns: minmax(0, 1fr); } }
 .opps select { width: 100%; min-width: 0; }
@@ -257,7 +257,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     <div class="panel">
       <div>
         <h2>Players</h2>
-        <p class="sub">Everyone who books courts, plays as an opponent or comes to sessions. Tick Booker for the people who book courts.</p>
+        <p class="sub">Everyone who books courts, plays on a booking or comes to sessions. Tick Booker for the people who book courts.</p>
       </div>
       <form class="addrow" id="addform">
         <input id="newname" placeholder="New player’s name" autocomplete="off" maxlength="40" aria-label="New player’s name">
@@ -329,7 +329,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
 
   // ---------- booking status ----------
-  // "confirmed" — Confirmed (opponents named, or made inside the confirm window)
+  // "confirmed" — Confirmed (players named, or made inside the confirm window)
   // "prov"      — Provisional, before the confirm deadline
   // "risk"      — Provisional and past the deadline: the club may have cancelled it
   // "past"      — Provisional and already started
@@ -344,7 +344,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     return pname(b.bookerId) + (o.length === 1 ? " v " + pname(o[0]) : o.length ? " +" + o.length : "");
   }
   function teamFull(b) {
-    return pname(b.bookerId) + (b.opponentIds.length ? " with " + b.opponentIds.map(pname).join(", ") : ", no opponents yet");
+    return pname(b.bookerId) + (b.opponentIds.length ? " with " + b.opponentIds.map(pname).join(", ") : ", no other players yet");
   }
 
   // Bookings on one court for one date, sorted by start, as minutes.
@@ -384,7 +384,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       .sort(function (a, b) { return (a.start + pad(a.court)).localeCompare(b.start + pad(b.court)); })
       .forEach(function (b) {
         var r = get(b.bookerId); r.onBooking = true; r.roles.push("Court " + b.court + " " + b.start + " · booker");
-        b.opponentIds.forEach(function (pid) { var o = get(pid); o.onBooking = true; o.roles.push("Court " + b.court + " " + b.start + " · opponent"); });
+        b.opponentIds.forEach(function (pid) { var o = get(pid); o.onBooking = true; o.roles.push("Court " + b.court + " " + b.start + " · player"); });
       });
     S.attendance.filter(function (a) { return a.date === date; }).forEach(function (a) { var r = get(a.playerId); r.status = a.status; r.added = a.added; });
     return out.sort(function (a, b) { return pname(a.id).localeCompare(pname(b.id)); });
@@ -441,7 +441,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     });
   }
 
-  // ---------- render: needs an opponent ----------
+  // ---------- render: needs players ----------
   // Provisional bookings past their deadline, plus those whose deadline is within 2 days.
   function renderAttention() {
     var el = $("attention");
@@ -453,9 +453,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     }).sort(function (a, b) { return deadline(a) - deadline(b); });
     if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
     var risky = items.filter(function (b) { return bstatus(b) === "risk"; }).length;
-    el.innerHTML = '<h2>Needs opponents</h2>' +
-      '<p class="hint">The club cancels provisional bookings that have no opponents ' + CFG.confirmHours + ' hours before they start.' +
-      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the opponents, mark it confirmed, or delete it.' : '') + '</p>' +
+    el.innerHTML = '<h2>Needs players</h2>' +
+      '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
+      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' +
       '<ul>' + items.map(function (b) {
         var st = bstatus(b), dl = deadline(b);
         var cls = st === "risk" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
@@ -505,8 +505,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
           var b = x.b, st = bstatus(b);
           if (st === "prov") n.prov++;
           if (st === "risk") n.risk++;
-          var note = st === "prov" ? "Provisional: name opponents by " + when(deadline(b))
-            : st === "risk" ? "May have been cancelled: no opponents by " + when(deadline(b))
+          var note = st === "prov" ? "Provisional: name players by " + when(deadline(b))
+            : st === "risk" ? "May have been cancelled: no players named by " + when(deadline(b))
             : st === "past" ? "Was provisional" : "Confirmed";
           var label = st === "prov" ? '<span class="tag">Prov</span> ' : st === "risk" ? '<span class="tag warn">Cancelled?</span> ' : "";
           var desc = teamFull(b) + " · " + b.start + "–" + b.end + " · " + note;
@@ -675,7 +675,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var opps = chosenOpps(ed);
     for (var i = 0; i < opps.length; i++) {
       if (opps.indexOf(opps[i]) !== i) return pname(opps[i]) + " is picked twice.";
-      if (ed.bookerId && opps[i] === ed.bookerId) return pname(opps[i]) + " booked the court, so can't also be an opponent.";
+      if (ed.bookerId && opps[i] === ed.bookerId) return pname(opps[i]) + " booked the court, so can't also be listed as a player.";
     }
     return "";
   }
@@ -689,18 +689,18 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     el.innerHTML = p ? esc(p) : hm(ed.start) + "–" + hm(en) + (notes.length ? ' <span class="note">· ' + notes.join(", ") + '</span>' : '');
     $("save").disabled = !!p;
 
-    // Status: confirmed once opponents are named; otherwise the admin can choose.
+    // Status: confirmed once players are named; otherwise the admin can choose.
     var opps = chosenOpps(ed).length, box = $("statusfield"), hint = $("statushint");
     if (!ed.statusTouched && !ed.id) ed.status = defaultStatus(ed);
     box.hidden = opps > 0;
     $("st-Provisional").checked = ed.status === "Provisional";
     $("st-Confirmed").checked = ed.status === "Confirmed";
     var at = localStart(ed.date, ed.start), dl = at - CFG.confirmHours * HOUR;
-    if (opps) hint.textContent = "Confirmed: opponents named.";
-    else if (ed.status === "Confirmed") hint.textContent = ed.id ? "Confirmed without opponents." : dl <= nowMs() ? "Made inside " + CFG.confirmHours + " hours of the booking, so it starts as confirmed." : "Confirmed without opponents.";
+    if (opps) hint.textContent = "Confirmed: players named.";
+    else if (ed.status === "Confirmed") hint.textContent = ed.id ? "Confirmed without players named." : dl <= nowMs() ? "Made inside " + CFG.confirmHours + " hours of the booking, so it starts as confirmed." : "Confirmed without players named.";
     else if (at <= nowMs()) hint.textContent = "This booking has started.";
     else if (dl <= nowMs()) hint.textContent = "Past the " + when(dl) + " deadline: the club may have cancelled it. Check the club system.";
-    else hint.textContent = "Name opponents by " + when(dl) + ", or the club cancels it.";
+    else hint.textContent = "Name players by " + when(dl) + ", or the club cancels it.";
     $("statushint-wrap").hidden = false;
   }
   function playerOptions(selected, blank) {
@@ -731,7 +731,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       return '<label><input type="radio" name="len" value="' + l + '"' + (l === ed.minutes ? ' checked' : '') + '><span>' + l + ' min</span></label>';
     }).join("");
     var opps = [0, 1, 2].map(function (i) {
-      return '<select id="opp-' + i + '" data-slot="' + i + '" aria-label="Opponent ' + (i + 1) + '">' + playerOptions(ed.opponentIds[i], "Opponent " + (i + 1)) + '</select>';
+      return '<select id="opp-' + i + '" data-slot="' + i + '" aria-label="Player ' + (i + 1) + '">' + playerOptions(ed.opponentIds[i], "Player " + (i + 1)) + '</select>';
     }).join("");
 
     w.innerHTML = '<div class="scrim" data-act="close"><form class="sheet" id="bookform" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
@@ -742,8 +742,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<div class="field"><span class="flabel">Booked by</span>' + picker + '</div>' +
       '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
       '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
-      '<div class="field"><span class="flabel">Opponents</span><div class="opps">' + opps + '</div>' +
-      '<p class="hint">Up to 3, from the Players list. You don’t need to name everyone: one opponent confirms the booking. Missing someone? Add them on the Players tab.</p></div>' +
+      '<div class="field"><span class="flabel">Players</span><div class="opps">' + opps + '</div>' +
+      '<p class="hint">Up to 3 besides the booker, from the Players list. You don’t need to name everyone: one player confirms the booking. Missing someone? Add them on the Players tab.</p></div>' +
       '<div class="field statusbox"><div id="statusfield"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' +
       '<label><input type="radio" name="status" id="st-Provisional" value="Provisional"><span>Provisional</span></label>' +
       '<label><input type="radio" name="status" id="st-Confirmed" value="Confirmed"><span>Confirmed</span></label></div></div>' +

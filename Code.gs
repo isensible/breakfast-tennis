@@ -3,17 +3,18 @@
  *
  * Tabs in the spreadsheet this script is bound to (created automatically; other tabs are never touched):
  *   Settings:   book-ahead days, courts, booking lengths, start step, confirm hours, weekly session times
- *   Players:    ID | Name | Booker            — everyone who books, plays as an opponent, or attends
- *   Bookings:   Date | Court | Start | Finish | Minutes | Status | Booker | Opponents |
- *               Booker name | Opponent names | Updated | Updated by | ID
+ *   Players:    ID | Name | Booker            — everyone who books, plays on a booking, or attends
+ *   Bookings:   Date | Court | Start | Finish | Minutes | Status | Booker | Players |
+ *               Booker name | Player names | Updated | Updated by | ID
+ *               ("Players" here means the people named on the booking besides the booker.)
  *   Attendance: Date | Player | Status | Added | Name | Updated | Updated by
  *
  * Bookings and attendance refer to players by ID; the name columns are only there to make
  * the sheet readable, and are refreshed whenever a player is renamed.
  *
  * Booking status:
- *   A booking with opponents is Confirmed. Without opponents it is Provisional if it was made
- *   more than "Confirm opponent (hours before)" ahead, otherwise Confirmed. A Provisional booking
+ *   A booking with players named is Confirmed. Without them it is Provisional if it was made
+ *   more than "Confirm players (hours before)" ahead, otherwise Confirmed. A Provisional booking
  *   past that deadline may have been cancelled by the club; the app flags it but doesn't block anything.
  *
  * Attendance is per session (date) and player. A No-show by someone named on a booking that
@@ -27,8 +28,8 @@ const BOOKINGS = 'Bookings';
 const PLAYERS = 'Players';
 const ATTENDANCE = 'Attendance';
 const OLD_BOOKERS = 'Bookers';
-const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Status', 'Booker', 'Opponents',
-  'Booker name', 'Opponent names', 'Updated', 'Updated by', 'ID'];
+const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Status', 'Booker', 'Players',
+  'Booker name', 'Player names', 'Updated', 'Updated by', 'ID'];
 const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, status: 5, booker: 6, opponents: 7,
   bookerName: 8, opponentNames: 9, updated: 10, by: 11, id: 12 };
 const PLAYERS_HEADER = ['ID', 'Name', 'Booker'];
@@ -43,7 +44,7 @@ const DEFAULT_SETTINGS = [
   ['Courts', '14', ''],
   ['Booking lengths (minutes)', '60, 90, 120', ''],
   ['Start time step (minutes)', '30', ''],
-  ['Confirm opponent (hours before)', '72', ''],
+  ['Confirm players (hours before)', '72', ''],
   ['', '', ''],
   ['Day', 'Start', 'Finish'],
   ['Wednesday', '06:30', '08:00'],
@@ -129,13 +130,13 @@ function saveBooking(b) {
     (b.opponentIds || []).forEach(o => {
       const pid = String(o || '').trim();
       if (!pid) return;
-      if (!byId[pid]) throw new Error('An opponent is no longer on the Players list. Reload and pick again.');
-      if (pid === bookerId) throw new Error(booker.name + ' booked the court, so can’t also be an opponent.');
-      if (oppIds.indexOf(pid) !== -1) throw new Error(byId[pid].name + ' is listed as an opponent twice.');
+      if (!byId[pid]) throw new Error('A player is no longer on the Players list. Reload and pick again.');
+      if (pid === bookerId) throw new Error(booker.name + ' booked the court, so can’t also be listed as a player.');
+      if (oppIds.indexOf(pid) !== -1) throw new Error(byId[pid].name + ' is listed twice.');
       oppIds.push(pid);
     });
-    // Any number of opponents up to 3 is fine: not everyone needs naming for a booking to be confirmed.
-    if (oppIds.length > 3) throw new Error('A booking can have at most 3 opponents.');
+    // Any number of players up to 3 is fine: not everyone needs naming for a booking to be confirmed.
+    if (oppIds.length > 3) throw new Error('A booking can name at most 3 players besides the booker.');
 
     const s = toMin_(start), e = s + minutes;
     if (e > 24 * 60) throw new Error('A booking can’t run past midnight.');
@@ -312,7 +313,14 @@ function refreshNames_(players) {
 
 // ---------- bookings ----------
 
-function bookingsSheet_() { return sheet_(BOOKINGS, BOOKINGS_HEADER); }
+function bookingsSheet_() {
+  const sh = sheet_(BOOKINGS, BOOKINGS_HEADER);
+  // Sheets made before "opponents" were renamed "players" get their headings updated once.
+  const h = sh.getRange(1, COL.opponents + 1, 1, 3).getDisplayValues()[0];
+  if (String(h[0]).trim() === 'Opponents') sh.getRange(1, COL.opponents + 1).setValue('Players');
+  if (String(h[2]).trim() === 'Opponent names') sh.getRange(1, COL.opponentNames + 1).setValue('Player names');
+  return sh;
+}
 
 /**
  * All bookings as plain objects. If a row typed in by hand has names but no IDs, the names are
@@ -394,7 +402,7 @@ function blackMarks_(bookings, att, since) {
   att.forEach(a => {
     if (a.status !== NO_SHOW || a.date < since) return;
     (byDate[a.date] || []).forEach(b => {
-      const role = b.bookerId === a.playerId ? 'booker' : b.opponentIds.indexOf(a.playerId) !== -1 ? 'opponent' : '';
+      const role = b.bookerId === a.playerId ? 'booker' : b.opponentIds.indexOf(a.playerId) !== -1 ? 'player' : '';
       if (role) out.push({ date: a.date, playerId: a.playerId, court: b.court, start: b.start, end: b.end, role: role });
     });
   });
@@ -530,7 +538,7 @@ function readConfig_() {
     else if (label === 'courts') found.courts = [values[i][1], i];
     else if (label.indexOf('booking length') === 0) found.lengths = [values[i][1], i];
     else if (label.indexOf('start time step') === 0) found.step = [values[i][1], i];
-    else if (label.indexOf('confirm opponent') === 0) found.confirm = [values[i][1], i];
+    else if (label.indexOf('confirm player') === 0 || label.indexOf('confirm opponent') === 0) found.confirm = [values[i][1], i];
     else if (label === 'day' && dayHeader < 0) dayHeader = i;
   }
   const where = k => 'Settings tab, row ' + (found[k][1] + 1);
@@ -562,7 +570,7 @@ function readConfig_() {
   if (found.confirm && found.confirm[0].trim()) {
     confirmHours = Number(found.confirm[0]);
     if (!(confirmHours >= 0 && confirmHours <= 24 * 14 && Math.floor(confirmHours) === confirmHours)) {
-      throw new Error(where('confirm') + ': "Confirm opponent (hours before)" must be a whole number of hours, e.g. 72.');
+      throw new Error(where('confirm') + ': "Confirm players (hours before)" must be a whole number of hours, e.g. 72.');
     }
   }
 

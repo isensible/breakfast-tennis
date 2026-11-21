@@ -30,24 +30,24 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ### Players
 
-The **Players** view lists everyone who books courts, plays as an opponent or comes to sessions. Each player has a fixed ID (P0001, P0002 …) that bookings and attendance use, so renaming a player updates them everywhere.
+The **Players** view lists everyone who books courts, plays on a booking or comes to sessions. Each player has a fixed ID (P0001, P0002 …) that bookings and attendance use, so renaming a player updates them everywhere.
 
 - **Booker**: tick for the people who book courts. Only bookers appear under "Booked by" in the booking form.
 - **Rename** and **Remove**: a player who is on a booking or an attendance record can't be removed; untick Booker instead.
 - Names must be unique; add an initial to tell two people apart.
 
-### Opponents and booking status
+### Players on a booking and booking status
 
-- Each booking can name **up to 3 opponents**, picked from the Players list. You don't need to name everyone who'll play. Add new people on the Players view first.
-- A booking with at least one opponent named is **Confirmed**.
-- A booking without opponents made **more than 72 hours ahead** starts as **Provisional** (hatched, "Prov" tag), with the deadline for naming opponents. One made **inside 72 hours** starts as **Confirmed**. The 72 comes from **Confirm opponent (hours before)** in Settings.
-- When there are no opponents you can switch the status between Provisional and Confirmed yourself, for example once you've checked the club system.
-- A provisional booking still without opponents at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the opponents, mark it confirmed, or delete it.
-- The **Needs opponents** list at the top of the Sessions view shows "Cancelled?" bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
+- Besides the booker, each booking can name **up to 3 players**, picked from the Players list. You don't need to name everyone who'll play. Add new people on the Players view first.
+- A booking with at least one player named is **Confirmed**.
+- A booking with no players named, made **more than 72 hours ahead**, starts as **Provisional** (hatched, "Prov" tag), with the deadline for naming players. One made **inside 72 hours** starts as **Confirmed**. The 72 comes from **Confirm players (hours before)** in Settings.
+- When no players are named you can switch the status between Provisional and Confirmed yourself, for example once you've checked the club system.
+- A provisional booking still with no players named at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the players, mark it confirmed, or delete it.
+- The **Needs players** list at the top of the Sessions view shows "Cancelled?" bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
 
 ### Attendance and black marks
 
-- Each session has an **Attendance** section (tap to open). It lists everyone named on that session's bookings, as booker or opponent.
+- Each session has an **Attendance** section (tap to open). It lists everyone named on that session's bookings, as booker or player.
 - Mark each person **Attended** or **No-show**; tap again to clear. **Mark the rest attended** fills in everyone not yet checked.
 - **Add a player who came** adds someone from the Players list who wasn't on a booking; they're marked attended. Remove them with ×.
 - A **No-show** by someone named on a booking is a **black mark**: one per booking they were on that session. The Players view lists black marks from the last 12 months, and shows each player's count.
@@ -61,7 +61,7 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Book ahead days | 9 | Bookings open this many days before a session. Later sessions are locked, show their opening date, and the server refuses them. |
 | Courts | 14 | Number of courts shown for each session. |
 | Booking lengths (minutes) | 60, 90, 120 | The lengths offered in the booking form, separated by commas. |
-| Confirm opponent (hours before) | 72 | A booking with no opponent is *provisional*. It must have an opponent this many hours before it starts, or the club cancels it. If this row is missing, 72 is used. |
+| Confirm players (hours before) | 72 | A booking with no players named is *provisional*. Players must be named this many hours before it starts, or the club cancels it. If this row is missing, 72 is used. An older sheet's "Confirm opponent (hours before)" row also works. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:
@@ -114,12 +114,12 @@ An older **Settings** tab keeps working.
 
 **Players**: ID | Name | Booker. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers.
 
-**Bookings**: Date | Court | Start | Finish | Minutes | Status | Booker | Opponents | Booker name | Opponent names | Updated | Updated by | ID
+**Bookings**: Date | Court | Start | Finish | Minutes | Status | Booker | Players | Booker name | Player names | Updated | Updated by | ID
 
 - Date as `yyyy-mm-dd` (e.g. `2026-11-11`) or `dd/mm/yyyy`; Court as a number; Start as `hh:mm`.
 - Fill in either **Minutes** or **Finish**; the app works out the other.
 - **Status** is `Provisional` or `Confirmed`.
-- **Booker** and **Opponents** hold player IDs (opponents separated by commas). On a row you add by hand you can leave them blank and type names under **Booker name** / **Opponent names** instead; they're matched to the Players list.
+- **Booker** and **Players** hold player IDs (players separated by commas). On a row you add by hand you can leave them blank and type names under **Booker name** / **Player names** instead; they're matched to the Players list.
 - Leave **ID** blank on rows you add; the app fills it in.
 
 **Attendance**: Date | Player | Status | Added | Name | Updated | Updated by. Status is `Attended` or `No-show`; Added is `Yes` for players who weren't on a booking.
