@@ -158,7 +158,6 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .flabel { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
 .picker { display: flex; flex-wrap: wrap; gap: 6px; }
 .picker label { position: relative; }
-.picker label.off span { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
 .picker input { position: absolute; opacity: 0; pointer-events: none; }
 .picker span { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
 .picker input:checked + span { background: var(--court); border-color: var(--court); color: var(--court-ink); }
@@ -244,7 +243,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .pill.disputed { background: var(--court-soft); color: var(--court); }
 .pill.cleared { border: 1px solid var(--line); color: var(--muted); }
 .pill.spent { border: 1px solid var(--warn); color: var(--warn); }
-.banwarn { color: var(--warn); font-weight: 600; font-size: .9rem; margin: 0; }
+.banwarn { color: var(--muted); font-size: .9rem; margin: 0; }
 .preview { margin: 0; font-weight: 600; }
 .preview.bad { color: var(--warn); }
 .att-role .linklike { font-size: inherit; }
@@ -376,7 +375,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function spentMarks() {
     var out = {};
     Object.keys(S.standing).forEach(function (pid) {
-      S.standing[pid].bans.forEach(function (b) { (b.markIds || []).forEach(function (id) { out[id] = b; }); });
+      (S.standing[pid].calculated || []).forEach(function (b) { (b.markIds || []).forEach(function (id) { out[id] = b; }); });
     });
     return out;
   }
@@ -388,7 +387,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       .forEach(function (m) {
         pending = pending.filter(function (x) { return daysApart(x.date, m.date) < r.periodDays; });
         pending.push(m);
-        if (pending.length >= r.marks) { bans.push({ from: m.date, to: plusDays(m.date, r.banDays - 1) }); pending = []; }
+        if (r.marks > 0 && pending.length >= r.marks) { bans.push({ from: m.date, to: plusDays(m.date, r.banDays - 1) }); pending = []; }
       });
     var today = S.today;
     var counting = pending.filter(function (x) { return daysApart(x.date, today) < r.periodDays; }).length;
@@ -520,22 +519,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var st = bstatus(b);
       return st === "risk" || (st === "prov" && deadline(b) <= soon);
     }).sort(function (a, b) { return deadline(a) - deadline(b); });
-    // Upcoming bookings whose booker is banned on the day (players named on a booking may be banned; bookers may not).
-    var todayStr = S.today || ymd(new Date());
-    var banned = [];
-    S.bookings.filter(function (b) { return b.date >= todayStr; }).sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); })
-      .forEach(function (b) { var ban = banOn(b.bookerId, b.date); if (ban) banned.push({ b: b, pid: b.bookerId, ban: ban }); });
-    if (!items.length && !banned.length) { el.hidden = true; el.innerHTML = ""; return; }
+    if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
     var risky = items.filter(function (b) { return bstatus(b) === "risk"; }).length;
-    el.innerHTML = '<h2>' + (banned.length && !items.length ? 'Banned bookers' : banned.length ? 'Needs attention' : 'Needs players') + '</h2>' +
-      (items.length ? '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
-      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' : '') +
-      (banned.length ? '<p class="hint">These bookings have a booker who is banned on the day, so the club may cancel them. Check the club system, or move the booking to another booker.</p>' : '') +
-      '<ul>' + banned.map(function (x) {
-        return '<li class="lapsed"><button type="button" data-open="' + esc(x.b.id) + '"><span class="tag warn">Banned</span>' +
-          '<span class="what">Court ' + x.b.court + ' · ' + fmt(x.b.date) + ' ' + x.b.start + ' · ' + esc(pname(x.pid)) + '</span>' +
-          '<span class="due">Banned until ' + fmt(x.ban.to) + '</span></button></li>';
-      }).join("") + items.map(function (b) {
+    el.innerHTML = '<h2>Needs players</h2>' +
+      '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
+      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' +
+      '<ul>' + items.map(function (b) {
         var st = bstatus(b), dl = deadline(b);
         var cls = st === "risk" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
         return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
@@ -680,13 +669,16 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var shown = S.marks.filter(function (m) { return S.showCleared || m.status !== "Cleared"; });
     var clearedCount = S.marks.length - S.marks.filter(function (m) { return m.status !== "Cleared"; }).length;
 
-    var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays +
-      '-day court and lesson ban: a banned player can’t book courts, but can still be named as a player on someone else’s booking. Disputed marks still count until the club clears them. Marks that led to a ban no longer count.</p></div>' +
+    var ruleText = r.marks > 0
+      ? 'As a guide, the app applies the club’s usual rule: ' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays + '-day court and lesson ban, and the marks that led to it are used up. Disputed marks count until the club clears them. '
+      : 'Working out bans from marks is turned off in Settings. ';
+    var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + ruleText +
+      'The club’s own record comes first: set a player’s “Banned until” date with Edit to match it. Black marks and bans don’t change any bookings.</p></div>' +
       '<button type="button" class="btn primary" data-act="mark-new">Add black mark</button></div>';
     if (bannedNow.length || atRisk.length) {
       html += '<div class="standings">';
       if (bannedNow.length) html += '<div class="standing banned"><h3>Banned now</h3><ul>' + bannedNow.map(function (x) {
-        return '<li><b>' + esc(x.p.name) + '</b><span>until ' + fmt(x.st.banned.to) + (x.st.banned.source === 'manual' ? ' · set by hand' : ' · ' + r.marks + ' marks') + '</span></li>';
+        return '<li><b>' + esc(x.p.name) + '</b><span>until ' + fmt(x.st.banned.to) + (x.st.banned.source === 'manual' ? ' · from the club' : ' · worked out from marks') + '</span></li>';
       }).join("") + '</ul></div>';
       if (atRisk.length) html += '<div class="standing risk"><h3>One mark from a ban</h3><ul>' + atRisk.map(function (x) {
         return '<li><b>' + esc(x.p.name) + '</b><span>' + x.st.counting.length + ' of ' + r.marks + (x.st.nextDropOff ? ' · first drops off ' + fmt(x.st.nextDropOff) : '') + '</span></li>';
@@ -729,7 +721,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="Name">' +
           '<label class="editlabel">Banned until <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
           '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button>' +
-          '<p class="hint" style="flex-basis:100%">Set "Banned until" for a ban the club has given that the marks here don’t explain. Leave it empty otherwise.</p></li>';
+          '<p class="hint" style="flex-basis:100%">Set “Banned until” to the last day of the ban in the club’s record. It replaces the date worked out from marks, even if it’s shorter. Leave it empty to use the worked-out date.</p></li>';
       }
       var st = S.standing[p.id], up = upcoming[p.id] || 0, tags = '';
       if (st && st.banned) tags += '<span class="tag warn">Banned until ' + fmt(st.banned.to) + '</span>';
@@ -774,10 +766,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var before = bansFrom(mk.playerId, others);
     var after = bansFrom(mk.playerId, others.concat([{ id: mk.id || 'new', playerId: mk.playerId, date: mk.date, status: mk.status }]));
     var text = "", bad = false;
-    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "Saving this bans " + name + " until " + fmt(after.banned.to) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
-    else if (!after.banned && before.banned) text = "Saving this lifts " + name + "’s ban.";
+    var manual = S.byId[mk.playerId] && S.byId[mk.playerId].bannedUntil;
+    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "By the usual rule, this means a ban for " + name + " until " + fmt(after.banned.to) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
+    else if (!after.banned && before.banned) text = "By the usual rule, this lifts " + name + "’s ban.";
     else if (!after.banned && after.counting === r.marks - 1 && r.marks > 1) { text = name + " will be on " + after.counting + " of " + r.marks + " marks: one more means a ban."; bad = true; }
     else if (!after.banned && mk.status !== "Cleared") text = name + " will be on " + after.counting + " of " + r.marks + " marks.";
+    if (text && manual) text += " " + name + "’s ban date is set from the club’s record (" + fmt(manual) + "), so that’s what shows.";
     el.textContent = text; el.className = "preview" + (bad ? " bad" : "");
   }
   function renderMarkSheet() {
@@ -859,7 +853,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (!b) return;
     S.mark = null;
     var o = b.opponentIds.slice(0, 3); while (o.length < 3) o.push("");
-    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, bookerId: b.bookerId, origBooker: b.bookerId,
+    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, bookerId: b.bookerId,
       opponentIds: o, status: b.status, origStatus: b.status, statusTouched: false };
     renderSheet();
   }
@@ -910,10 +904,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     else hint.textContent = "Name players by " + when(dl) + ", or the club cancels it.";
     $("statushint-wrap").hidden = false;
 
-    // An existing booking whose booker is banned on the day may be cancelled by the club. (Named players may be banned.)
+    // For information only: bans never stop a booking being recorded.
     var bb = ed.bookerId && banOn(ed.bookerId, ed.date);
     var bw = $("banwarn");
-    bw.textContent = bb ? pname(ed.bookerId) + " is banned until " + fmt(bb.to) + ", so the club may cancel this booking. Check the club system, or pick another booker." : "";
+    bw.textContent = bb ? pname(ed.bookerId) + " has a ban recorded until " + fmt(bb.to) + "." : "";
     bw.hidden = !bb;
   }
   function playerOptions(selected, blank) {
@@ -933,10 +927,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (ed.bookerId && !bookers.some(function (p) { return p.id === ed.bookerId; })) bookers.unshift({ id: ed.bookerId, name: pname(ed.bookerId) });
     var picker = bookers.length
       ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + bookers.map(function (p) {
-          // Banned players can't book; an existing booking keeps its booker selectable.
-          var st = S.standing[p.id], banned = st && st.banned && !(ed.id && ed.origBooker === p.id);
-          return '<label' + (banned ? ' class="off" title="Banned until ' + fmt(st.banned.to) + '"' : '') + '><input type="radio" name="who" value="' + esc(p.id) + '"' +
-            (ed.bookerId === p.id ? ' checked' : '') + (banned ? ' disabled' : '') + '><span>' + esc(p.name) + (banned ? ' · banned' : '') + '</span></label>';
+          return '<label><input type="radio" name="who" value="' + esc(p.id) + '"' + (ed.bookerId === p.id ? ' checked' : '') + '><span>' + esc(p.name) + '</span></label>';
         }).join("") + '</div>'
       : '<p class="empty">No bookers yet. <button type="button" class="linklike" data-act="go-players">Tick Booker on the Players list</button> first.</p>';
     var starts = startOptions(s, ed.start).map(function (t) {

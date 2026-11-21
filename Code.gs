@@ -21,12 +21,16 @@
  *
  * Attendance is per session (date) and player.
  *
+ * The club is the system of record for bookings, black marks and bans; this app is the admins' working
+ * copy, so black marks and bans never block or change anything about bookings. They're information only.
+ *
  * Black marks are recorded by admins against any player, optionally linked to a session or booking.
- * Status is Active, Disputed (admins are asking the club to clear it) or Cleared. Active and Disputed
- * marks count towards a ban: "Black marks for a ban" (3) within "Black mark period (days)" (90) gives a
- * "Ban length (days)" (30) ban from the date of the last of them. Marks that trigger a ban are used up.
- * A player's "Banned until" date on the Players tab records a ban the club has imposed directly.
- * A banned player can't be the booker of a new booking, but can still be named as a player.
+ * Status is Active, Disputed (admins are asking the club to clear it) or Cleared. As a guide, Active and
+ * Disputed marks are run through the club's usual rule: "Black marks for a ban" (3) within "Black mark
+ * period (days)" (90) gives a "Ban length (days)" (30) ban from the date of the last of them, and the
+ * marks that led to it are used up. Setting "Black marks for a ban" to 0 turns the calculation off.
+ * A player's "Banned until" date on the Players tab is the club's actual ban: when it's set it replaces
+ * the worked-out ban for that player, whether longer, shorter or already over.
  */
 
 const LOOKBACK_DAYS = 56;     // bookings and attendance the page loads
@@ -187,13 +191,6 @@ function saveBooking(b) {
     if (!booker) throw new Error('Pick who booked the court.');
     if (!booker.booker && !(existing && existing.bookerId === bookerId)) {
       throw new Error(booker.name + ' isn’t marked as a booker on the Players list.');
-    }
-    // A banned player can't book courts (they can still be named as a player on someone else's booking).
-    if (!(existing && existing.bookerId === bookerId)) {
-      const st = standing_(readMarks_(players), players, config, today_())[bookerId];
-      if (st && st.banned) {
-        throw new Error(booker.name + ' is banned until ' + st.banned.to + ', so can’t book courts. Pick another booker; ' + booker.name + ' can still be named as a player.');
-      }
     }
 
     const oppIds = [];
@@ -524,13 +521,14 @@ function findMarkRow_(sh, id) {
 }
 
 /**
- * Each player's position: bans worked out from their marks, any ban set by hand, and how close
- * they are to the next ban. Returns { playerId: { bans: [{from, to, source}], banned, counting,
- * nextDropOff, atRisk } } for players with any marks or a ban.
+ * Each player's position, for information. Returns { playerId: { calculated: [{from, to, markIds}],
+ * bans: [{from, to, source}], banned, counting, nextDropOff, atRisk } } for players with marks or a ban.
  *
- * Rule: walking through a player's Active and Disputed marks in date order, once "marks" of them fall
- * within "periodDays" of each other, a ban of "banDays" starts on the date of the last one
- * (to = from + banDays - 1, the last banned day). The marks that caused it are used up.
+ * Calculated bans: walking through a player's Active and Disputed marks in date order, once "marks" of
+ * them fall within "periodDays" of each other, a ban of "banDays" starts on the date of the last one
+ * (to = from + banDays - 1, the last banned day) and those marks are used up. "marks" = 0 turns this off.
+ * If the player has a "Banned until" date, that is their ban (source 'manual') and replaces the
+ * calculated ones; otherwise the calculated bans apply (source 'marks').
  */
 function standing_(marks, players, config, today) {
   const rule = config.ban;
@@ -540,28 +538,29 @@ function standing_(marks, players, config, today) {
   players.forEach(p => {
     const list = (byPlayer[p.id] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
     if (!list.length && !p.bannedUntil) return;
-    const bans = [];
+    const calculated = [];
     let pending = [];
     list.forEach(m => {
       pending = pending.filter(x => daysBetween_(x.date, m.date) < rule.periodDays);
       pending.push(m);
-      if (pending.length >= rule.marks) {
-        bans.push({ from: m.date, to: addDays_(m.date, rule.banDays - 1), source: 'marks', markIds: pending.map(x => x.id) });
+      if (rule.marks > 0 && pending.length >= rule.marks) {
+        calculated.push({ from: m.date, to: addDays_(m.date, rule.banDays - 1), source: 'marks', markIds: pending.map(x => x.id) });
         pending = [];
       }
     });
-    if (p.bannedUntil) bans.push({ from: '', to: p.bannedUntil, source: 'manual' });
+    const bans = p.bannedUntil ? [{ from: '', to: p.bannedUntil, source: 'manual' }] : calculated;
     const current = bans.filter(b => (!b.from || b.from <= today) && b.to >= today)
       .sort((a, b) => b.to.localeCompare(a.to))[0] || null;
     // Marks still counting towards the next ban (not used up and within the period up to today).
     const counting = pending.filter(x => daysBetween_(x.date, today) < rule.periodDays);
     const nextDropOff = counting.length ? addDays_(counting[0].date, rule.periodDays) : '';
     out[p.id] = {
+      calculated: calculated,
       bans: bans,
       banned: current ? { from: current.from, to: current.to, source: current.source } : null,
       counting: counting.map(x => x.id),
       nextDropOff: nextDropOff,
-      atRisk: !current && counting.length >= rule.marks - 1 && rule.marks > 1,
+      atRisk: !current && rule.marks > 1 && counting.length >= rule.marks - 1,
     };
   });
   return out;
@@ -736,7 +735,7 @@ function readConfig_() {
   }
 
   const ban = Object.assign({}, DEFAULT_BAN);
-  [['banMarks', 'marks', 'Black marks for a ban', 1, 20], ['banPeriod', 'periodDays', 'Black mark period (days)', 1, 730],
+  [['banMarks', 'marks', 'Black marks for a ban', 0, 20], ['banPeriod', 'periodDays', 'Black mark period (days)', 1, 730],
    ['banDays', 'banDays', 'Ban length (days)', 1, 365]].forEach(x => {
     const f = found[x[0]];
     if (!f || !f[0].trim()) return;
