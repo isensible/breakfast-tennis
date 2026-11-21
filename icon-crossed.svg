@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-9.2 -23.6 143 143" width="128" height="128">
+  <defs>
+    <!-- egg (same art as the app icon) -->
+    <radialGradient id="cx-white" cx="0.52" cy="0.48" r="0.6">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.62" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#f4ecdb"/>
+    </radialGradient>
+    <radialGradient id="cx-shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.72" stop-color="#3a3020" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#3a3020" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cx-yolk" cx="0.36" cy="0.32" r="0.78">
+      <stop offset="0" stop-color="#ecff4d"/>
+      <stop offset="0.5" stop-color="#cde21a"/>
+      <stop offset="1" stop-color="#93ab0a"/>
+    </radialGradient>
+    <clipPath id="cx-ball"><circle cx="33" cy="31" r="13.6"/></clipPath>
+    <!-- pan -->
+    <radialGradient id="cx-pan" cx="0.42" cy="0.38" r="0.7">
+      <stop offset="0" stop-color="#5a6266"/>
+      <stop offset="1" stop-color="#2e3437"/>
+    </radialGradient>
+    <linearGradient id="cx-grip" x1="0" x2="1">
+      <stop offset="0" stop-color="#6b4527"/>
+      <stop offset="0.45" stop-color="#9a6a3e"/>
+      <stop offset="1" stop-color="#5c3a20"/>
+    </linearGradient>
+    <!-- racket -->
+    <clipPath id="cx-strings"><ellipse cx="0" cy="-31" rx="15.2" ry="20.2"/></clipPath>
+    <linearGradient id="cx-wrap" x1="0" x2="1">
+      <stop offset="0" stop-color="#e6e9e4"/>
+      <stop offset="0.5" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d5dad3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Racket: handle bottom-left, head top-right. Drawn first so the pan sits over it where the handles cross. -->
+  <g transform="translate(64 66) rotate(40) translate(0 -22)">
+    <!-- strings -->
+    <g clip-path="url(#cx-strings)" stroke="#dfe4dc" stroke-width=".9">
+      <path d="M-13.5 -55V-5M-10 -55V-5M-6.5 -55V-5M-3 -55V-5M.5 -55V-5M4 -55V-5M7.5 -55V-5M11 -55V-5M14.5 -55V-5"/>
+      <path d="M-20 -48H20M-20 -44.5H20M-20 -41H20M-20 -37.5H20M-20 -34H20M-20 -30.5H20M-20 -27H20M-20 -23.5H20M-20 -20H20M-20 -16.5H20M-20 -13H20"/>
+    </g>
+    <!-- frame -->
+    <ellipse cx="0" cy="-31" rx="17.4" ry="22.4" fill="none" stroke="#1d6a4c" stroke-width="4.4"/>
+    <!-- throat -->
+    <path d="M-11.5 -13.5 L-2.6 7 M11.5 -13.5 L2.6 7" stroke="#1d6a4c" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M-7.6 -9.5 H7.6" stroke="#1d6a4c" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- handle with grip tape -->
+    <rect x="-3.9" y="5" width="7.8" height="44" rx="2.4" fill="url(#cx-wrap)" stroke="#b7beb4" stroke-width=".6"/>
+    <path d="M-3.9 12l7.8-3M-3.9 18l7.8-3M-3.9 24l7.8-3M-3.9 30l7.8-3M-3.9 36l7.8-3M-3.9 42l7.8-3" stroke="#aab2a6" stroke-width=".8"/>
+    <rect x="-4.6" y="46.5" width="9.2" height="4.6" rx="1.6" fill="#1d6a4c"/>
+  </g>
+
+  <!-- Frying pan: handle bottom-right, pan top-left, with the tennis-ball egg in it. -->
+  <g transform="translate(64 66) rotate(-40) translate(0 -22)">
+    <!-- handle -->
+    <rect x="-3.2" y="-3" width="6.4" height="22" rx="2" fill="#3b4245"/>
+    <rect x="-4.4" y="16" width="8.8" height="34" rx="4.4" fill="url(#cx-grip)"/>
+    <circle cx="0" cy="44.5" r="1.8" fill="#3d2614"/>
+    <circle cx="0" cy="3" r="1.3" fill="#7d878c"/>
+    <!-- pan -->
+    <circle cx="0" cy="-28" r="25.5" fill="#22272a"/>
+    <circle cx="0" cy="-28" r="22.3" fill="url(#cx-pan)"/>
+    <path d="M-19.5 -39 A22.3 22.3 0 0 1 -6 -49.5" fill="none" stroke="#8a9398" stroke-width="1.3" stroke-linecap="round" opacity=".7"/>
+    <!-- egg, upright in the pan whichever way the pan is turned -->
+    <g transform="translate(0 -28) rotate(40) scale(.6) translate(-32 -32)">
+      <path d="M61.2 32.2C61.4 33.8 61.2 35.7 60.7 37.2C60.1 38.8 58.9 40.2 57.9 41.5C56.8 42.8 55.5 43.8 54.4 45C53.4 46.1 52.5 47.2 51.5 48.3C50.6 49.5 49.9 50.9 48.9 51.9C47.8 53 46.7 54.1 45.3 54.8C44 55.4 42.4 55.6 40.9 55.7C39.4 55.8 37.8 55.4 36.4 55.3C35 55.3 33.7 55.1 32.3 55.3C30.9 55.5 29.6 56.1 28 56.5C26.5 56.9 24.7 57.7 23 57.9C21.2 58 19.3 58.1 17.6 57.6C16 57.2 14.3 56.3 13 55.2C11.7 54.1 10.5 52.7 9.6 51.3C8.7 49.8 8 48.2 7.5 46.5C7 44.9 6.9 43.1 6.9 41.5C6.9 39.8 7.3 38.1 7.6 36.5C8 35 8.5 33.6 8.8 32.2C9.1 30.8 9.2 29.5 9.3 28.1C9.4 26.7 9.1 25.3 9.2 23.8C9.3 22.3 9.3 20.6 9.9 19.3C10.4 17.9 11.4 16.6 12.5 15.6C13.5 14.5 15 13.9 16.3 13.1C17.6 12.4 18.9 11.9 20.1 11.1C21.3 10.3 22.4 9.3 23.6 8.4C24.9 7.5 26.2 6.3 27.6 5.6C29.1 5 30.8 4.5 32.3 4.5C33.8 4.6 35.5 5.3 36.9 6.1C38.3 6.9 39.5 8.2 40.7 9.3C41.8 10.3 42.7 11.4 43.8 12.4C44.8 13.3 45.8 14.1 46.8 14.9C47.9 15.7 49 16.4 50.1 17.3C51.2 18.1 52.2 19.1 53.3 20.1C54.4 21.1 55.5 22.2 56.5 23.4C57.5 24.6 58.7 25.9 59.5 27.4C60.3 28.9 61 30.6 61.2 32.2Z"
+            fill="url(#cx-white)" stroke="#d9a85b" stroke-opacity=".7" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="34" cy="32.8" r="18" fill="url(#cx-shadow)"/>
+      <circle cx="33" cy="31" r="14.8" fill="url(#cx-yolk)"/>
+      <g clip-path="url(#cx-ball)" fill="none" stroke-linecap="round">
+        <g stroke="#6f8a05" stroke-opacity=".5" stroke-width="4.2">
+          <path d="M20.9 18.6c6.1 4.4 7.2 20 .5 25.8"/>
+          <path d="M45.1 17.8c-6.8 5.2-5.8 20.8.5 25.8"/>
+        </g>
+        <g stroke="#ffffff" stroke-width="2.9">
+          <path d="M20.9 18.6c6.1 4.4 7.2 20 .5 25.8"/>
+          <path d="M45.1 17.8c-6.8 5.2-5.8 20.8.5 25.8"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
