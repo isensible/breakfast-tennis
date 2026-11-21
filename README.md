@@ -12,7 +12,7 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ## Setup (about 10 minutes)
 
-1. Create a new Google Sheet (or open your existing tracker). The app adds four tabs, **Settings**, **Players**, **Bookings** and **Attendance**, and never touches other tabs.
+1. Create a new Google Sheet (or open your existing tracker). The app adds five tabs, **Settings**, **Players**, **Bookings**, **Attendance** and **Black marks**, and never touches other tabs.
 2. In the sheet: **Extensions → Apps Script**.
 3. Replace the contents of `Code.gs` with this `Code.gs`.
 4. Click **+ → HTML**, name it `Index` (exactly), and paste in `Index.html`.
@@ -45,12 +45,23 @@ The **Players** view lists everyone who books courts, plays on a booking or come
 - A provisional booking still with no players named at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the players, mark it confirmed, or delete it.
 - The **Needs players** list at the top of the Sessions view shows "Cancelled?" bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
 
-### Attendance and black marks
+### Attendance
 
 - Each session has an **Attendance** section (tap to open). It lists everyone named on that session's bookings, as booker or player.
 - Mark each person **Attended** or **No-show**; tap again to clear. **Mark the rest attended** fills in everyone not yet checked.
 - **Add a player who came** adds someone from the Players list who wasn't on a booking; they're marked attended. Remove them with ×.
-- A **No-show** by someone named on a booking is a **black mark**: one per booking they were on that session. The Players view lists black marks from the last 12 months, and shows each player's count.
+- A No-show doesn't create a black mark by itself. Next to a No-show there's **Add black mark**, which opens the black mark form with the player, session and reason filled in.
+
+### Black marks and bans
+
+Black marks are given by the club, for a no-show, being a few minutes late, or sometimes a fault in the club's attendance system. Record them on the **Players** view with **Add black mark**: any player, a date, a reason (No-show, Late, System fault, Other), optionally the session or booking it relates to, and a note.
+
+- **Status:** **Active**, **Disputed** (you're asking the club managers to clear it) or **Cleared**. Add a status note, such as "Emailed the club manager on 21 Nov". Disputed marks still count until the club clears them.
+- **Bans:** 3 active or disputed black marks within 90 days means a 30-day court and lesson ban, starting on the date of the third mark. The marks that led to a ban are then used up and don't count towards the next one; they're labelled **Led to ban**. Clearing one of them lifts the ban. The 3, 90 and 30 are set in Settings.
+- **Banned by hand:** for a ban the club has given that the recorded marks don't explain, open the player with **Edit** on the Players view and set **Banned until**.
+- **Banned now** and **One mark from a ban** lists at the top of the Black marks panel show who is banned and until when, and who to try to get marks cleared for first, with the date their oldest counting mark drops off.
+- The form shows the effect before you save, for example "Saving this bans Chris Wood until Sun 20 Dec".
+- **Booking while banned:** a banned player can't be the booker of a new booking (the form greys them out and the server refuses it), but can still be named as a player on someone else's booking. An existing booking whose booker is banned on the day is listed under **Needs attention**, since the club may cancel it.
 
 ## Settings tab
 
@@ -62,6 +73,9 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Courts | 14 | Number of courts shown for each session. |
 | Booking lengths (minutes) | 60, 90, 120 | The lengths offered in the booking form, separated by commas. |
 | Confirm players (hours before) | 72 | A booking with no players named is *provisional*. Players must be named this many hours before it starts, or the club cancels it. If this row is missing, 72 is used. An older sheet's "Confirm opponent (hours before)" row also works. |
+| Black marks for a ban | 3 | Active or disputed black marks within the period that lead to a ban. If this row is missing, 3 is used. |
+| Black mark period (days) | 90 | How many days black marks count for. If missing, 90. |
+| Ban length (days) | 30 | How long a ban lasts, including the day it starts. If missing, 30. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:
@@ -112,7 +126,7 @@ An older **Settings** tab keeps working.
 
 ## Editing the sheet by hand
 
-**Players**: ID | Name | Booker. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers.
+**Players**: ID | Name | Booker | Banned until. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers. **Banned until** is the last day of a ban set by hand, as `yyyy-mm-dd`.
 
 **Bookings**: Date | Court | Start | Finish | Minutes | Status | Booker | Players | Booker name | Player names | Updated | Updated by | ID
 
@@ -123,6 +137,8 @@ An older **Settings** tab keeps working.
 - Leave **ID** blank on rows you add; the app fills it in.
 
 **Attendance**: Date | Player | Status | Added | Name | Updated | Updated by. Status is `Attended` or `No-show`; Added is `Yes` for players who weren't on a booking.
+
+**Black marks**: ID | Date | Player | Reason | Session | Booking | Note | Status | Status note | Player name | Updated | Updated by. Player is a player ID; on a row you add by hand you can leave it blank and type the name under **Player name**. Reason is `No-show`, `Late`, `System fault` or `Other`; Status is `Active`, `Disputed` or `Cleared`.
 
 ## Deployments
 

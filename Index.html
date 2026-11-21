@@ -158,6 +158,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .flabel { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
 .picker { display: flex; flex-wrap: wrap; gap: 6px; }
 .picker label { position: relative; }
+.picker label.off span { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
 .picker input { position: absolute; opacity: 0; pointer-events: none; }
 .picker span { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
 .picker input:checked + span { background: var(--court); border-color: var(--court); color: var(--court-ink); }
@@ -218,10 +219,39 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .people .stat .bad { color: var(--warn); font-weight: 600; }
 .people input[type="text"] { flex: 1 1 160px; min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .search { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; }
+.marks-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.marks-head > div { flex: 1 1 260px; min-width: 0; }
+.standings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.standing { border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.standing.banned { background: var(--warn-soft); }
+.standing.risk { background: var(--bg); border: 1px solid var(--line); }
+.standing h3 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; }
+.standing ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.standing li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.standing li b { font-weight: 600; }
+.standing li span { color: var(--muted); font-size: .88rem; }
+.standing.banned li span { color: var(--warn); }
 .marks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
-.marks li { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 7px 10px; border-radius: 8px; background: var(--warn-soft); }
-.marks li b { color: var(--warn); }
-.marks .meta { color: var(--ink); font-size: .9rem; }
+.marks button { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px;
+  display: grid; gap: 2px; }
+.marks button:hover { border-color: var(--court); }
+.marks .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.marks .top b { font-weight: 600; }
+.marks .meta, .marks .snote { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.marks .cleared { opacity: .6; }
+.pill { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+.pill.active { background: var(--warn-soft); color: var(--warn); }
+.pill.disputed { background: var(--court-soft); color: var(--court); }
+.pill.cleared { border: 1px solid var(--line); color: var(--muted); }
+.pill.spent { border: 1px solid var(--warn); color: var(--warn); }
+.banwarn { color: var(--warn); font-weight: 600; font-size: .9rem; margin: 0; }
+.preview { margin: 0; font-weight: 600; }
+.preview.bad { color: var(--warn); }
+.att-role .linklike { font-size: inherit; }
+.att-row .btn.small { padding: 3px 9px; font-size: .82rem; }
+.people .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.people input[type="date"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.people .editlabel { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--muted); }
 </style>
 </head>
 <body data-viewer="<?= viewer ?>">
@@ -286,7 +316,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     players: [], byId: {},
     bookings: [],      // {id, date, court, start, end, minutes, status, bookerId, opponentIds, startsAt}
     attendance: [],    // {date, playerId, status: "Attended" | "No-show" | "", added}
-    marks: [],         // {date, playerId, court, start, end, role}
+    marks: [],         // black marks: {id, date, playerId, reason, sessionDate, bookingId, note, status, statusNote}
+    standing: {},      // per player: {bans: [{from, to, source, markIds}], banned, counting, nextDropOff, atRisk}
+    mark: null,        // black mark being added or edited
+    showCleared: false,
     weekStart: mondayOf(new Date()),
     tab: "sessions", edit: null, openAtt: {}, query: "", renaming: null, confirmRemove: null
   };
@@ -327,6 +360,41 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function errMsg(e) { return (e && e.message ? e.message : String(e)).replace(/^Exception:\s*/, ""); }
   function pname(id) { var p = S.byId[id]; return p ? p.name : "Unknown player"; }
   function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+  function fmt(dateStr) { return short(parse(dateStr)); }
+  function daysApart(a, b) { return Math.round((parse(b) - parse(a)) / 86400000); }
+  function plusDays(dateStr, n) { return ymd(addDays(parse(dateStr), n)); }
+  function rule() { return CFG.ban || { marks: 3, periodDays: 90, banDays: 30 }; }
+
+  // ---------- bans ----------
+  // The ban (worked out from marks, or set by hand) covering a date, or null.
+  function banOn(pid, date) {
+    var st = S.standing[pid]; if (!st) return null;
+    return st.bans.filter(function (b) { return (!b.from || b.from <= date) && b.to >= date; })
+      .sort(function (a, b) { return b.to.localeCompare(a.to); })[0] || null;
+  }
+  // Marks that have already led to a ban, so no longer count.
+  function spentMarks() {
+    var out = {};
+    Object.keys(S.standing).forEach(function (pid) {
+      S.standing[pid].bans.forEach(function (b) { (b.markIds || []).forEach(function (id) { out[id] = b; }); });
+    });
+    return out;
+  }
+  // Same rule as the server, used to preview the effect of a mark before saving it.
+  function bansFrom(pid, marks) {
+    var r = rule(), bans = [], pending = [];
+    marks.filter(function (m) { return m.playerId === pid && m.status !== "Cleared"; })
+      .sort(function (a, b) { return a.date.localeCompare(b.date); })
+      .forEach(function (m) {
+        pending = pending.filter(function (x) { return daysApart(x.date, m.date) < r.periodDays; });
+        pending.push(m);
+        if (pending.length >= r.marks) { bans.push({ from: m.date, to: plusDays(m.date, r.banDays - 1) }); pending = []; }
+      });
+    var today = S.today;
+    var counting = pending.filter(function (x) { return daysApart(x.date, today) < r.periodDays; }).length;
+    var current = bans.filter(function (b) { return b.from <= today && b.to >= today; })[0] || null;
+    return { banned: current, counting: counting };
+  }
 
   // ---------- booking status ----------
   // "confirmed" — Confirmed (players named, or made inside the confirm window)
@@ -414,6 +482,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     S.bookings = data.bookings;
     S.attendance = data.attendance || [];
     S.marks = data.marks || [];
+    S.standing = data.standing || {};
     if (!S.loaded) { S.loaded = true; S.weekStart = mondayOf(parse(data.today)); }
     setStatus("");
     render();
@@ -451,12 +520,22 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var st = bstatus(b);
       return st === "risk" || (st === "prov" && deadline(b) <= soon);
     }).sort(function (a, b) { return deadline(a) - deadline(b); });
-    if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
+    // Upcoming bookings whose booker is banned on the day (players named on a booking may be banned; bookers may not).
+    var todayStr = S.today || ymd(new Date());
+    var banned = [];
+    S.bookings.filter(function (b) { return b.date >= todayStr; }).sort(function (a, b) { return (a.date + a.start).localeCompare(b.date + b.start); })
+      .forEach(function (b) { var ban = banOn(b.bookerId, b.date); if (ban) banned.push({ b: b, pid: b.bookerId, ban: ban }); });
+    if (!items.length && !banned.length) { el.hidden = true; el.innerHTML = ""; return; }
     var risky = items.filter(function (b) { return bstatus(b) === "risk"; }).length;
-    el.innerHTML = '<h2>Needs players</h2>' +
-      '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
-      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' +
-      '<ul>' + items.map(function (b) {
+    el.innerHTML = '<h2>' + (banned.length && !items.length ? 'Banned bookers' : banned.length ? 'Needs attention' : 'Needs players') + '</h2>' +
+      (items.length ? '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
+      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' : '') +
+      (banned.length ? '<p class="hint">These bookings have a booker who is banned on the day, so the club may cancel them. Check the club system, or move the booking to another booker.</p>' : '') +
+      '<ul>' + banned.map(function (x) {
+        return '<li class="lapsed"><button type="button" data-open="' + esc(x.b.id) + '"><span class="tag warn">Banned</span>' +
+          '<span class="what">Court ' + x.b.court + ' · ' + fmt(x.b.date) + ' ' + x.b.start + ' · ' + esc(pname(x.pid)) + '</span>' +
+          '<span class="due">Banned until ' + fmt(x.ban.to) + '</span></button></li>';
+      }).join("") + items.map(function (b) {
         var st = bstatus(b), dl = deadline(b);
         var cls = st === "risk" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
         return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
@@ -555,11 +634,15 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var rows = list.map(function (p) {
       var nm = esc(pname(p.id));
       var role = p.roles.length ? p.roles.map(esc).join("<br>") : p.added ? "Added to this session" : "Not on a booking";
-      if (p.status === "No-show" && p.onBooking) role += ' · <span class="mark">black mark</span>';
+      var mk = S.marks.filter(function (m) { return m.playerId === p.id && m.sessionDate === date; })[0];
+      var markBtn = "";
+      if (mk) role += ' · <button type="button" class="linklike mark" data-act="mark-open" data-id="' + esc(mk.id) + '">black mark' + (mk.status === "Cleared" ? ' (cleared)' : mk.status === "Disputed" ? ' (disputed)' : '') + '</button>';
+      else if (p.status === "No-show") markBtn = '<button type="button" class="btn small" data-act="mark-new" data-pid="' + esc(p.id) + '" data-date="' + date + '">Add black mark</button>';
       return '<li class="att-row"><div class="att-who"><span class="att-name">' + nm + '</span><span class="att-role">' + role + '</span></div>' +
         '<div class="seg" role="group" aria-label="Attendance for ' + nm + '">' +
         '<button type="button" class="yes" aria-pressed="' + (p.status === "Attended") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="Attended">Attended</button>' +
         '<button type="button" class="no" aria-pressed="' + (p.status === "No-show") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="No-show">No-show</button></div>' +
+        markBtn +
         (p.onBooking ? '' : '<button type="button" class="x" data-act="att-remove" data-date="' + date + '" data-pid="' + esc(p.id) + '" aria-label="Remove ' + nm + ' from this session">×</button>') +
         '</li>';
     }).join("");
@@ -585,19 +668,56 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   }
 
   // ---------- render: players ----------
+  function renderMarks() {
+    var r = rule(), spent = spentMarks();
+    var bannedNow = [], atRisk = [];
+    S.players.forEach(function (p) {
+      var st = S.standing[p.id]; if (!st) return;
+      if (st.banned) bannedNow.push({ p: p, st: st });
+      else if (st.atRisk) atRisk.push({ p: p, st: st });
+    });
+    bannedNow.sort(function (a, b) { return a.st.banned.to.localeCompare(b.st.banned.to); });
+    var shown = S.marks.filter(function (m) { return S.showCleared || m.status !== "Cleared"; });
+    var clearedCount = S.marks.length - S.marks.filter(function (m) { return m.status !== "Cleared"; }).length;
+
+    var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays +
+      '-day court and lesson ban: a banned player can’t book courts, but can still be named as a player on someone else’s booking. Disputed marks still count until the club clears them. Marks that led to a ban no longer count.</p></div>' +
+      '<button type="button" class="btn primary" data-act="mark-new">Add black mark</button></div>';
+    if (bannedNow.length || atRisk.length) {
+      html += '<div class="standings">';
+      if (bannedNow.length) html += '<div class="standing banned"><h3>Banned now</h3><ul>' + bannedNow.map(function (x) {
+        return '<li><b>' + esc(x.p.name) + '</b><span>until ' + fmt(x.st.banned.to) + (x.st.banned.source === 'manual' ? ' · set by hand' : ' · ' + r.marks + ' marks') + '</span></li>';
+      }).join("") + '</ul></div>';
+      if (atRisk.length) html += '<div class="standing risk"><h3>One mark from a ban</h3><ul>' + atRisk.map(function (x) {
+        return '<li><b>' + esc(x.p.name) + '</b><span>' + x.st.counting.length + ' of ' + r.marks + (x.st.nextDropOff ? ' · first drops off ' + fmt(x.st.nextDropOff) : '') + '</span></li>';
+      }).join("") + '</ul></div>';
+      html += '</div>';
+    }
+    html += shown.length ? '<ul class="marks">' + shown.map(function (m) {
+      var ban = spent[m.id];
+      var pill = m.status === "Cleared" ? '<span class="pill cleared">Cleared</span>' : m.status === "Disputed" ? '<span class="pill disputed">Disputed</span>' : '<span class="pill active">Active</span>';
+      if (ban && m.status !== "Cleared") pill += ' <span class="pill spent">Led to ban</span>';
+      var linked = m.sessionDate ? ' · ' + fmt(m.sessionDate) + ' session' : '';
+      var bk = m.bookingId && S.bookings.filter(function (b) { return b.id === m.bookingId; })[0];
+      if (bk) linked = ' · Court ' + bk.court + ' ' + fmt(bk.date) + ' ' + bk.start;
+      return '<li><button type="button" class="' + (m.status === "Cleared" ? 'cleared' : '') + '" data-act="mark-open" data-id="' + esc(m.id) + '">' +
+        '<span class="top">' + pill + '<b>' + esc(pname(m.playerId)) + '</b><span>' + fmt(m.date) + ' · ' + esc(m.reason) + linked + '</span></span>' +
+        (m.note ? '<span class="meta">' + esc(m.note) + '</span>' : '') +
+        (m.statusNote ? '<span class="snote">' + esc(m.statusNote) + '</span>' : '') + '</button></li>';
+    }).join("") + '</ul>' : '<p class="empty">' + (S.loaded ? (S.marks.length ? 'No active black marks.' : 'No black marks recorded.') : 'Loading…') + '</p>';
+    if (clearedCount) html += '<div><button type="button" class="linklike" data-act="toggle-cleared">' + (S.showCleared ? 'Hide cleared marks' : 'Show ' + plural(clearedCount, 'cleared mark')) + '</button></div>';
+    $("marks").innerHTML = html;
+  }
+
   function renderPlayers() {
     var todayStr = S.today || ymd(new Date());
-    var upcoming = {}, marks = {};
+    var upcoming = {};
     S.bookings.forEach(function (b) {
       if (b.date < todayStr) return;
       [b.bookerId].concat(b.opponentIds).forEach(function (pid) { upcoming[pid] = (upcoming[pid] || 0) + 1; });
     });
-    S.marks.forEach(function (m) { marks[m.playerId] = (marks[m.playerId] || 0) + 1; });
-
-    $("marks").innerHTML = '<div><h2>Black marks</h2><p class="sub">No-shows by players named on a booking, over the last 12 months. Record them in each session’s attendance.</p></div>' +
-      (S.marks.length ? '<ul class="marks">' + S.marks.map(function (m) {
-        return '<li><b>' + esc(pname(m.playerId)) + '</b><span class="meta">' + short(parse(m.date)) + ' · Court ' + m.court + ' ' + m.start + '–' + m.end + ' · ' + m.role + '</span></li>';
-      }).join("") + '</ul>' : '<p class="empty">' + (S.loaded ? 'No black marks.' : 'Loading…') + '</p>');
+    renderMarks();
+    var r = rule();
 
     var q = S.query.trim().toLowerCase();
     var list = S.players.filter(function (p) { return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.id.toLowerCase() === q; });
@@ -606,18 +726,103 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     $("people").innerHTML = list.map(function (p) {
       var id = esc(p.id);
       if (S.renaming === p.id) {
-        return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="New name for ' + esc(p.name) + '">' +
-          '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button></li>';
+        return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="Name">' +
+          '<label class="editlabel">Banned until <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
+          '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button>' +
+          '<p class="hint" style="flex-basis:100%">Set "Banned until" for a ban the club has given that the marks here don’t explain. Leave it empty otherwise.</p></li>';
       }
-      var mk = marks[p.id] || 0, up = upcoming[p.id] || 0;
+      var st = S.standing[p.id], up = upcoming[p.id] || 0, tags = '';
+      if (st && st.banned) tags += '<span class="tag warn">Banned until ' + fmt(st.banned.to) + '</span>';
+      else if (st && st.counting.length) tags += '<span class="tag' + (st.atRisk ? ' warn' : '') + '">' + st.counting.length + ' of ' + r.marks + ' marks</span>';
       var right = S.confirmRemove === p.id
         ? '<span class="confirm">Remove ' + esc(p.name) + '?</span><button class="btn danger" data-act="remove-yes" data-id="' + id + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
         : '<label class="toggle"><input type="checkbox" data-act="booker" data-id="' + id + '"' + (p.booker ? ' checked' : '') + '> Booker</label>' +
-          '<button class="btn" data-act="rename" data-id="' + id + '">Rename</button>' +
+          '<button class="btn" data-act="rename" data-id="' + id + '">Edit</button>' +
           '<button class="btn danger" data-act="remove" data-id="' + id + '">Remove</button>';
-      return '<li><span class="who"><span class="name">' + esc(p.name) + '</span><span class="pid">' + id + '</span></span>' +
-        '<span class="stat">' + plural(up, "upcoming booking") + (mk ? ' · <span class="bad">' + plural(mk, "black mark") + '</span>' : '') + '</span>' + right + '</li>';
+      return '<li><span class="who"><span class="name">' + esc(p.name) + '</span><span class="pid">' + id + '</span>' + (tags ? '<span class="tags">' + tags + '</span>' : '') + '</span>' +
+        '<span class="stat">' + plural(up, "upcoming booking") + '</span>' + right + '</li>';
     }).join("");
+  }
+
+  // ---------- black mark form ----------
+  // S.mark = {id?, playerId, date, reason, sessionKey ('date|bookingId' or 'date|' or ''), note, status, statusNote, confirmDelete}
+  function openMark(id, preset) {
+    var m = id ? S.marks.filter(function (x) { return x.id === id; })[0] : null;
+    if (id && !m) return;
+    S.edit = null;
+    S.mark = m ? { id: m.id, playerId: m.playerId, date: m.date, reason: m.reason, sessionKey: m.sessionDate ? m.sessionDate + '|' + (m.bookingId || '') : '',
+      note: m.note, status: m.status, statusNote: m.statusNote }
+      : { id: null, playerId: '', date: S.today || ymd(new Date()), reason: 'No-show', sessionKey: '', note: '', status: 'Active', statusNote: '' };
+    if (preset) Object.keys(preset).forEach(function (k) { S.mark[k] = preset[k]; });
+    renderSheet();
+  }
+  // The player's recent sessions, to link a mark to: their bookings, then sessions they were added to.
+  function sessionChoices(pid) {
+    var todayStr = S.today || ymd(new Date()), out = [], seen = {};
+    S.bookings.filter(function (b) { return b.date <= todayStr && (b.bookerId === pid || b.opponentIds.indexOf(pid) !== -1); })
+      .sort(function (a, b) { return (b.date + b.start).localeCompare(a.date + a.start); })
+      .forEach(function (b) { out.push({ key: b.date + '|' + b.id, label: fmt(b.date) + ' · Court ' + b.court + ' ' + b.start + (b.bookerId === pid ? ' (booker)' : '') }); seen[b.date] = true; });
+    S.attendance.filter(function (a) { return a.playerId === pid && a.date <= todayStr && !seen[a.date]; })
+      .forEach(function (a) { out.push({ key: a.date + '|', label: fmt(a.date) + ' session' }); });
+    return out;
+  }
+  function markPreview() {
+    var mk = S.mark, el = $("mkpreview"); if (!mk || !el) return;
+    if (!mk.playerId || !mk.date) { el.textContent = ""; return; }
+    var r = rule(), name = pname(mk.playerId);
+    var others = S.marks.filter(function (m) { return m.id !== mk.id; });
+    var before = bansFrom(mk.playerId, others);
+    var after = bansFrom(mk.playerId, others.concat([{ id: mk.id || 'new', playerId: mk.playerId, date: mk.date, status: mk.status }]));
+    var text = "", bad = false;
+    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "Saving this bans " + name + " until " + fmt(after.banned.to) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
+    else if (!after.banned && before.banned) text = "Saving this lifts " + name + "’s ban.";
+    else if (!after.banned && after.counting === r.marks - 1 && r.marks > 1) { text = name + " will be on " + after.counting + " of " + r.marks + " marks: one more means a ban."; bad = true; }
+    else if (!after.banned && mk.status !== "Cleared") text = name + " will be on " + after.counting + " of " + r.marks + " marks.";
+    el.textContent = text; el.className = "preview" + (bad ? " bad" : "");
+  }
+  function renderMarkSheet() {
+    var w = $("sheetwrap"), mk = S.mark;
+    var players = S.players.slice();
+    var choices = mk.playerId ? sessionChoices(mk.playerId) : [];
+    if (mk.sessionKey && !choices.some(function (c) { return c.key === mk.sessionKey; })) choices.unshift({ key: mk.sessionKey, label: fmt(mk.sessionKey.split('|')[0]) + ' session' });
+    var reasons = ["No-show", "Late", "System fault", "Other"].map(function (x) {
+      return '<label><input type="radio" name="mk-reason" value="' + x + '"' + (mk.reason === x ? ' checked' : '') + '><span>' + x + '</span></label>';
+    }).join("");
+    var statuses = [["Active", "Active"], ["Disputed", "Disputed with the club"], ["Cleared", "Cleared"]].map(function (x) {
+      return '<label><input type="radio" name="mk-status" value="' + x[0] + '"' + (mk.status === x[0] ? ' checked' : '') + '><span>' + x[1] + '</span></label>';
+    }).join("");
+    w.innerHTML = '<div class="scrim" data-act="close"><form class="sheet" id="markform" role="dialog" aria-modal="true" aria-labelledby="mark-title">' +
+      '<div><h3 id="mark-title">' + (mk.id ? 'Black mark' : 'Add black mark') + '</h3></div>' +
+      '<div class="field"><label class="flabel" for="mk-player">Player</label><select id="mk-player">' +
+      '<option value="">Pick a player</option>' + players.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === mk.playerId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label class="flabel" for="mk-date">Date</label><input type="date" id="mk-date" value="' + esc(mk.date) + '" max="' + esc(S.today || '') + '"></div>' +
+      '<div class="field"><span class="flabel">Reason</span><div class="picker" role="radiogroup" aria-label="Reason">' + reasons + '</div></div>' +
+      '<div class="field"><label class="flabel" for="mk-session">Session (optional)</label><select id="mk-session"><option value="">Not linked to a session</option>' +
+      choices.map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.key === mk.sessionKey ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="field"><label class="flabel" for="mk-note">Note</label><input type="text" id="mk-note" maxlength="200" value="' + esc(mk.note) + '" placeholder="e.g. 10 minutes late, court given away"></div>' +
+      '<div class="field"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' + statuses + '</div>' +
+      '<input type="text" id="mk-snote" maxlength="200" value="' + esc(mk.statusNote) + '" placeholder="e.g. Emailed the club manager on 21 Nov" aria-label="Status note"></div>' +
+      '<p id="mkpreview" class="preview" aria-live="polite"></p>' +
+      '<div class="actions">' + (mk.id ? (mk.confirmDelete
+        ? '<span class="confirm">Delete this black mark?</span><button type="button" class="btn danger" data-act="mark-delete-yes">Delete</button><button type="button" class="btn" data-act="mark-delete-no">Keep</button>'
+        : '<button type="button" class="btn danger" data-act="mark-delete">Delete</button>') : '') +
+      '<span class="spacer"></span><button type="button" class="btn" data-act="close">Cancel</button>' +
+      '<button type="submit" class="btn primary">Save</button></div></form></div>';
+    w.hidden = false;
+    markPreview();
+    (mk.playerId ? $("mk-date") : $("mk-player")).focus();
+  }
+  function saveMark() {
+    var mk = S.mark; if (!mk) return;
+    mk.note = $("mk-note").value; mk.statusNote = $("mk-snote").value;
+    if (!mk.playerId) { toast("Pick the player who got the black mark."); return; }
+    if (!mk.date) { toast("Enter the date of the black mark."); return; }
+    var parts = mk.sessionKey ? mk.sessionKey.split('|') : ['', ''];
+    var payload = { id: mk.id || '', playerId: mk.playerId, date: mk.date, reason: mk.reason, sessionDate: parts[0], bookingId: parts[1] || '',
+      note: mk.note, status: mk.status, statusNote: mk.statusNote };
+    var name = pname(mk.playerId);
+    S.mark = null; renderSheet();
+    write("saveMark", payload, mk.id ? "Black mark updated" : "Black mark added for " + name);
   }
 
   // ---------- booking form ----------
@@ -644,6 +849,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var room2 = Math.min(next, Math.max(s.end, start + minLen)) - start;
       CFG.lengths.forEach(function (l) { if (l <= room2) len = l; });
     }
+    S.mark = null;
     S.edit = { id: null, date: date, court: court, start: start, minutes: len, bookerId: "", opponentIds: ["", "", ""], statusTouched: false };
     S.edit.status = defaultStatus(S.edit);
     renderSheet();
@@ -651,8 +857,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function openExisting(id) {
     var b = S.bookings.filter(function (x) { return x.id === id; })[0];
     if (!b) return;
+    S.mark = null;
     var o = b.opponentIds.slice(0, 3); while (o.length < 3) o.push("");
-    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, bookerId: b.bookerId,
+    S.edit = { id: b.id, date: b.date, court: b.court, start: toMin(b.start), minutes: b.minutes, bookerId: b.bookerId, origBooker: b.bookerId,
       opponentIds: o, status: b.status, origStatus: b.status, statusTouched: false };
     renderSheet();
   }
@@ -702,6 +909,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     else if (dl <= nowMs()) hint.textContent = "Past the " + when(dl) + " deadline: the club may have cancelled it. Check the club system.";
     else hint.textContent = "Name players by " + when(dl) + ", or the club cancels it.";
     $("statushint-wrap").hidden = false;
+
+    // An existing booking whose booker is banned on the day may be cancelled by the club. (Named players may be banned.)
+    var bb = ed.bookerId && banOn(ed.bookerId, ed.date);
+    var bw = $("banwarn");
+    bw.textContent = bb ? pname(ed.bookerId) + " is banned until " + fmt(bb.to) + ", so the club may cancel this booking. Check the club system, or pick another booker." : "";
+    bw.hidden = !bb;
   }
   function playerOptions(selected, blank) {
     var opts = S.players.slice();
@@ -712,6 +925,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   }
   function renderSheet() {
     var w = $("sheetwrap");
+    if (S.mark) { renderMarkSheet(); return; }
     if (!S.edit) { w.hidden = true; w.innerHTML = ""; return; }
     var ed = S.edit, d = parse(ed.date), s = SESSIONS[d.getDay()];
     var others = courtBookings(ed.date, ed.court, ed.id);
@@ -719,7 +933,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (ed.bookerId && !bookers.some(function (p) { return p.id === ed.bookerId; })) bookers.unshift({ id: ed.bookerId, name: pname(ed.bookerId) });
     var picker = bookers.length
       ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + bookers.map(function (p) {
-          return '<label><input type="radio" name="who" value="' + esc(p.id) + '"' + (ed.bookerId === p.id ? ' checked' : '') + '><span>' + esc(p.name) + '</span></label>';
+          // Banned players can't book; an existing booking keeps its booker selectable.
+          var st = S.standing[p.id], banned = st && st.banned && !(ed.id && ed.origBooker === p.id);
+          return '<label' + (banned ? ' class="off" title="Banned until ' + fmt(st.banned.to) + '"' : '') + '><input type="radio" name="who" value="' + esc(p.id) + '"' +
+            (ed.bookerId === p.id ? ' checked' : '') + (banned ? ' disabled' : '') + '><span>' + esc(p.name) + (banned ? ' · banned' : '') + '</span></label>';
         }).join("") + '</div>'
       : '<p class="empty">No bookers yet. <button type="button" class="linklike" data-act="go-players">Tick Booker on the Players list</button> first.</p>';
     var starts = startOptions(s, ed.start).map(function (t) {
@@ -748,7 +965,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<label><input type="radio" name="status" id="st-Provisional" value="Provisional"><span>Provisional</span></label>' +
       '<label><input type="radio" name="status" id="st-Confirmed" value="Confirmed"><span>Confirmed</span></label></div></div>' +
       '<div id="statushint-wrap"><p class="hint" id="statushint"></p></div></div>' +
-      '<div id="result" class="result" aria-live="polite"></div>' +
+      '<div id="result" class="result" aria-live="polite"></div><p id="banwarn" class="banwarn" hidden></p>' +
       '<div class="actions">' + (ed.id ? '<button type="button" class="btn danger" data-act="delete">Delete booking</button>' : '') +
       '<span class="spacer"></span><button type="button" class="btn" data-act="close">Cancel</button>' +
       '<button type="submit" class="btn primary" id="save">Save</button></div></form></div>';
@@ -810,7 +1027,24 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var act = e.target.closest("[data-act]");
     if (!act || act.tagName === "INPUT") return;
     var a = act.dataset.act, date = act.dataset.date, pid = act.dataset.pid, id = act.dataset.id;
-    if (a === "close") { if (e.target === act || act.tagName === "BUTTON") { S.edit = null; renderSheet(); } return; }
+    if (a === "close") { if (e.target === act || act.tagName === "BUTTON") { S.edit = null; S.mark = null; renderSheet(); } return; }
+    if (a === "mark-new") {
+      var preset = {};
+      if (pid) {
+        preset.playerId = pid; preset.reason = "No-show";
+        if (date) {
+          preset.date = date > (S.today || date) ? S.today : date;
+          var own = S.bookings.filter(function (b) { return b.date === date && (b.bookerId === pid || b.opponentIds.indexOf(pid) !== -1); })[0];
+          preset.sessionKey = date + '|' + (own ? own.id : '');
+        }
+      }
+      openMark(null, preset); return;
+    }
+    if (a === "mark-open") { openMark(id); return; }
+    if (a === "mark-delete") { S.mark.confirmDelete = true; renderSheet(); return; }
+    if (a === "mark-delete-no") { S.mark.confirmDelete = false; renderSheet(); return; }
+    if (a === "mark-delete-yes") { var mid = S.mark.id; S.mark = null; renderSheet(); write("deleteMark", mid, "Black mark deleted"); return; }
+    if (a === "toggle-cleared") { S.showCleared = !S.showCleared; renderMarks(); return; }
     if (a === "delete") deleteBooking();
     else if (a === "go-players") { S.edit = null; renderSheet(); S.tab = "players"; render(); }
     else if (a === "att-set") {
@@ -832,8 +1066,13 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     else if (a === "rename-cancel") { S.renaming = null; renderPlayers(); }
     else if (a === "rename-save") {
       var name = ($("rename-" + id).value || "").trim().replace(/\s+/g, " ");
+      var until = $("banuntil-" + id).value || "";
+      var pl = S.byId[id];
       S.renaming = null;
-      if (name && name !== pname(id)) write("updatePlayer", { id: id, name: name }, "Renamed to " + name);
+      var change = { id: id }, msg = [];
+      if (name && name !== pl.name) { change.name = name; msg.push("Renamed to " + name); }
+      if (until !== (pl.bannedUntil || "")) { change.bannedUntil = until; msg.push(until ? "Ban until " + fmt(until) + " saved" : "Ban date removed"); }
+      if (msg.length) write("updatePlayer", change, msg.join(". "));
       else renderPlayers();
     }
     else if (a === "remove") { S.confirmRemove = id; S.renaming = null; renderPlayers(); }
@@ -845,6 +1084,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (t.dataset && t.dataset.act === "booker") {
       var p = S.byId[t.dataset.id]; if (p) p.booker = t.checked;
       write("updatePlayer", { id: t.dataset.id, booker: t.checked }, pname(t.dataset.id) + (t.checked ? " can now book courts" : " is no longer a booker"));
+      return;
+    }
+    if (S.mark) {
+      if (t.id === "mk-player") { S.mark.playerId = t.value; S.mark.sessionKey = ''; S.mark.note = $("mk-note").value; S.mark.statusNote = $("mk-snote").value; renderSheet(); }
+      else if (t.id === "mk-date") { S.mark.date = t.value; markPreview(); }
+      else if (t.name === "mk-reason") S.mark.reason = t.value;
+      else if (t.name === "mk-status") { S.mark.status = t.value; markPreview(); }
+      else if (t.id === "mk-session") S.mark.sessionKey = t.value;
       return;
     }
     if (!S.edit) return;
@@ -861,9 +1108,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   document.addEventListener("submit", function (e) {
     e.preventDefault();
     if (e.target.id === "bookform") saveBooking();
+    if (e.target.id === "markform") saveMark();
   });
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && S.edit) { S.edit = null; renderSheet(); }
+    if (e.key === "Escape" && (S.edit || S.mark)) { S.edit = null; S.mark = null; renderSheet(); }
     if (e.key === "Enter" && e.target.id && e.target.id.indexOf("rename-") === 0) {
       e.preventDefault(); var btn = document.querySelector('[data-act="rename-save"]'); if (btn) btn.click();
     }
@@ -888,7 +1136,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   render();
   load();
   // Pick up other admins' changes every 30 seconds while the page is open (not while typing a rename).
-  setInterval(function () { if (!document.hidden && !S.busy && !S.edit && !S.renaming) load(); }, 30000);
+  setInterval(function () { if (!document.hidden && !S.busy && !S.edit && !S.mark && !S.renaming) load(); }, 30000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !S.busy && !S.renaming) load(); });
 })();
 </script>

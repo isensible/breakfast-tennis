@@ -2,12 +2,14 @@
  * Breakfast Tennis court bookings — Google Apps Script backend.
  *
  * Tabs in the spreadsheet this script is bound to (created automatically; other tabs are never touched):
- *   Settings:   book-ahead days, courts, booking lengths, start step, confirm hours, weekly session times
- *   Players:    ID | Name | Booker            — everyone who books, plays on a booking, or attends
+ *   Settings:   book-ahead days, courts, booking lengths, start step, confirm hours, ban rule, session times
+ *   Players:    ID | Name | Booker | Banned until   — everyone who books, plays on a booking, or attends
  *   Bookings:   Date | Court | Start | Finish | Minutes | Status | Booker | Players |
  *               Booker name | Player names | Updated | Updated by | ID
  *               ("Players" here means the people named on the booking besides the booker.)
  *   Attendance: Date | Player | Status | Added | Name | Updated | Updated by
+ *   Black marks: ID | Date | Player | Reason | Session | Booking | Note | Status | Status note |
+ *               Player name | Updated | Updated by
  *
  * Bookings and attendance refer to players by ID; the name columns are only there to make
  * the sheet readable, and are refreshed whenever a player is renamed.
@@ -17,22 +19,35 @@
  *   more than "Confirm players (hours before)" ahead, otherwise Confirmed. A Provisional booking
  *   past that deadline may have been cancelled by the club; the app flags it but doesn't block anything.
  *
- * Attendance is per session (date) and player. A No-show by someone named on a booking that
- * session is a "black mark".
+ * Attendance is per session (date) and player.
+ *
+ * Black marks are recorded by admins against any player, optionally linked to a session or booking.
+ * Status is Active, Disputed (admins are asking the club to clear it) or Cleared. Active and Disputed
+ * marks count towards a ban: "Black marks for a ban" (3) within "Black mark period (days)" (90) gives a
+ * "Ban length (days)" (30) ban from the date of the last of them. Marks that trigger a ban are used up.
+ * A player's "Banned until" date on the Players tab records a ban the club has imposed directly.
+ * A banned player can't be the booker of a new booking, but can still be named as a player.
  */
 
 const LOOKBACK_DAYS = 56;     // bookings and attendance the page loads
-const MARKS_DAYS = 365;       // how far back black marks are listed
+const CLEARED_DAYS = 365;     // how far back cleared black marks are loaded (active ones always are)
 const SETTINGS = 'Settings';
 const BOOKINGS = 'Bookings';
 const PLAYERS = 'Players';
 const ATTENDANCE = 'Attendance';
 const OLD_BOOKERS = 'Bookers';
+const MARKS = 'Black marks';
 const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Status', 'Booker', 'Players',
   'Booker name', 'Player names', 'Updated', 'Updated by', 'ID'];
 const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, status: 5, booker: 6, opponents: 7,
   bookerName: 8, opponentNames: 9, updated: 10, by: 11, id: 12 };
-const PLAYERS_HEADER = ['ID', 'Name', 'Booker'];
+const PLAYERS_HEADER = ['ID', 'Name', 'Booker', 'Banned until'];
+const MARKS_HEADER = ['ID', 'Date', 'Player', 'Reason', 'Session', 'Booking', 'Note', 'Status', 'Status note',
+  'Player name', 'Updated', 'Updated by'];
+const MCOL = { id: 0, date: 1, player: 2, reason: 3, session: 4, booking: 5, note: 6, status: 7, statusNote: 8,
+  name: 9, updated: 10, by: 11 };
+const REASONS = ['No-show', 'Late', 'System fault', 'Other'];
+const MARK_ACTIVE = 'Active', MARK_DISPUTED = 'Disputed', MARK_CLEARED = 'Cleared';
 const ATTENDANCE_HEADER = ['Date', 'Player', 'Status', 'Added', 'Name', 'Updated', 'Updated by'];
 const PROVISIONAL = 'Provisional', CONFIRMED = 'Confirmed';
 const ATTENDED = 'Attended', NO_SHOW = 'No-show';
@@ -45,6 +60,9 @@ const DEFAULT_SETTINGS = [
   ['Booking lengths (minutes)', '60, 90, 120', ''],
   ['Start time step (minutes)', '30', ''],
   ['Confirm players (hours before)', '72', ''],
+  ['Black marks for a ban', '3', ''],
+  ['Black mark period (days)', '90', ''],
+  ['Ban length (days)', '30', ''],
   ['', '', ''],
   ['Day', 'Start', 'Finish'],
   ['Wednesday', '06:30', '08:00'],
@@ -54,6 +72,7 @@ const DEFAULT_SETTINGS = [
 const DEFAULT_LENGTHS = [60, 90, 120];
 const DEFAULT_STEP = 30;
 const DEFAULT_CONFIRM_HOURS = 72;
+const DEFAULT_BAN = { marks: 3, periodDays: 90, banDays: 30 };
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // ---------- web app ----------
@@ -72,6 +91,7 @@ function setup() {
   settingsSheet_();
   ensureSchema_();
   sheet_(ATTENDANCE, ATTENDANCE_HEADER);
+  sheet_(MARKS, MARKS_HEADER);
 }
 
 // ---------- API called from the page ----------
@@ -82,17 +102,60 @@ function getData() {
   const players = readPlayers_();
   const all = readBookings_(players);
   const att = readAttendance_(players);
+  const marks = readMarks_(players);
   const today = today_();
   const since = addDays_(today, -LOOKBACK_DAYS);
+  const clearedSince = addDays_(today, -CLEARED_DAYS);
   return {
     today: today,
     now: Date.now(),
     config: config,
-    players: players.map(p => ({ id: p.id, name: p.name, booker: p.booker })),
+    players: players.map(p => ({ id: p.id, name: p.name, booker: p.booker, bannedUntil: p.bannedUntil })),
     bookings: all.filter(b => b.date >= since),
     attendance: att.filter(a => a.date >= since),
-    marks: blackMarks_(all, att, addDays_(today, -MARKS_DAYS)),
+    marks: marks.filter(m => m.status !== MARK_CLEARED || m.date >= clearedSince),
+    standing: standing_(marks, players, config, today),
   };
+}
+
+/**
+ * Add or change a black mark.
+ * m = { id (omit for new), date, playerId, reason, sessionDate?, bookingId?, note?, status?, statusNote? }
+ */
+function saveMark(m) {
+  return withLock_(() => {
+    const players = readPlayers_();
+    const byId = indexBy_(players, 'id');
+    const id = String(m.id || '');
+    const date = String(m.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Enter the date of the black mark.');
+    if (date > today_()) throw new Error('A black mark can’t be dated in the future.');
+    const player = byId[String(m.playerId || '')];
+    if (!player) throw new Error('Pick the player who got the black mark.');
+    const reason = REASONS.indexOf(m.reason) !== -1 ? m.reason : '';
+    if (!reason) throw new Error('Pick a reason: ' + REASONS.join(', ') + '.');
+    const status = [MARK_ACTIVE, MARK_DISPUTED, MARK_CLEARED].indexOf(m.status) !== -1 ? m.status : MARK_ACTIVE;
+    const sessionDate = String(m.sessionDate || '');
+    if (sessionDate && !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) throw new Error('Invalid session date.');
+    const note = cleanName_(m.note).slice(0, 200);
+    const statusNote = cleanName_(m.statusNote).slice(0, 200);
+
+    const sh = sheet_(MARKS, MARKS_HEADER);
+    const row = id ? findMarkRow_(sh, id) : 0;
+    if (id && !row) throw new Error('That black mark was deleted by someone else.');
+    const values = [id || newId_(), date, player.id, reason, sessionDate, String(m.bookingId || ''), note, status, statusNote,
+      player.name, new Date(), userEmail_()];
+    if (row) sh.getRange(row, 1, 1, values.length).setValues([values]);
+    else sh.appendRow(values);
+  });
+}
+
+function deleteMark(id) {
+  return withLock_(() => {
+    const sh = sheet_(MARKS, MARKS_HEADER);
+    const row = findMarkRow_(sh, String(id));
+    if (row) sh.deleteRow(row);
+  });
 }
 
 /**
@@ -124,6 +187,13 @@ function saveBooking(b) {
     if (!booker) throw new Error('Pick who booked the court.');
     if (!booker.booker && !(existing && existing.bookerId === bookerId)) {
       throw new Error(booker.name + ' isn’t marked as a booker on the Players list.');
+    }
+    // A banned player can't book courts (they can still be named as a player on someone else's booking).
+    if (!(existing && existing.bookerId === bookerId)) {
+      const st = standing_(readMarks_(players), players, config, today_())[bookerId];
+      if (st && st.banned) {
+        throw new Error(booker.name + ' is banned until ' + st.banned.to + ', so can’t book courts. Pick another booker; ' + booker.name + ' can still be named as a player.');
+      }
     }
 
     const oppIds = [];
@@ -197,6 +267,11 @@ function updatePlayer(p) {
       }
     }
     if (p.booker != null) sh.getRange(player.row, 3).setValue(p.booker ? 'Yes' : '');
+    if (p.bannedUntil != null) {
+      const until = String(p.bannedUntil || '');
+      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error('Enter the ban end date as a date.');
+      sh.getRange(player.row, 4).setValue(until);
+    }
   });
 }
 
@@ -207,10 +282,13 @@ function removePlayer(id) {
     if (!player) return;
     const used = readBookings_(players).filter(b => b.bookerId === player.id || b.opponentIds.indexOf(player.id) !== -1).length;
     const attended = readAttendance_(players).filter(a => a.playerId === player.id).length;
-    if (used || attended) {
-      throw new Error(player.name + ' is on ' + (used ? used + ' booking' + (used === 1 ? '' : 's') : '') +
-        (used && attended ? ' and ' : '') + (attended ? attended + ' attendance record' + (attended === 1 ? '' : 's') : '') +
-        ', so can’t be removed. Untick Booker if they no longer book courts.');
+    const marked = readMarks_(players).filter(m => m.playerId === player.id).length;
+    const parts = [];
+    if (used) parts.push(used + ' booking' + (used === 1 ? '' : 's'));
+    if (attended) parts.push(attended + ' attendance record' + (attended === 1 ? '' : 's'));
+    if (marked) parts.push(marked + ' black mark' + (marked === 1 ? '' : 's'));
+    if (parts.length) {
+      throw new Error(player.name + ' has ' + parts.join(' and ') + ', so can’t be removed. Untick Booker if they no longer book courts.');
     }
     playersSheet_().deleteRow(player.row);
   });
@@ -253,14 +331,19 @@ function setAttendance(p) {
 
 // ---------- players ----------
 
-function playersSheet_() { return sheet_(PLAYERS, PLAYERS_HEADER); }
+function playersSheet_() {
+  const sh = sheet_(PLAYERS, PLAYERS_HEADER);
+  // Players tabs made before bans existed get the "Banned until" heading once.
+  if (!String(sh.getRange(1, 4).getDisplayValue()).trim()) sh.getRange(1, 4).setValue('Banned until').setFontWeight('bold');
+  return sh;
+}
 
 /** Players with their sheet row. Rows typed in by hand without an ID are given one. */
 function readPlayers_() {
   const sh = playersSheet_();
   const n = sh.getLastRow() - 1;
   if (n < 1) return [];
-  const rows = sh.getRange(2, 1, n, 3).getDisplayValues();
+  const rows = sh.getRange(2, 1, n, 4).getDisplayValues();
   const out = [];
   let next = 0;
   rows.forEach(r => { const m = String(r[0]).match(/^P(\d+)$/i); if (m) next = Math.max(next, Number(m[1])); });
@@ -269,7 +352,7 @@ function readPlayers_() {
     if (!name) return;
     let id = String(r[0]).trim().toUpperCase();
     if (!id) { id = playerId_(++next); sh.getRange(i + 2, 1).setValue(id); }
-    out.push({ id: id, name: name, booker: isYes_(r[2]), row: i + 2 });
+    out.push({ id: id, name: name, booker: isYes_(r[2]), bannedUntil: normDate_(r[3]), row: i + 2 });
   });
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -308,6 +391,12 @@ function refreshNames_(players) {
   if (na > 0) {
     const ids = a.getRange(2, 2, na, 1).getDisplayValues();
     a.getRange(2, 5, na, 1).setValues(ids.map(r => [nameOf_(byId, String(r[0]).trim())]));
+  }
+  const m = sheet_(MARKS, MARKS_HEADER);
+  const nm = m.getLastRow() - 1;
+  if (nm > 0) {
+    const ids = m.getRange(2, MCOL.player + 1, nm, 1).getDisplayValues();
+    m.getRange(2, MCOL.name + 1, nm, 1).setValues(ids.map(r => [nameOf_(byId, String(r[0]).trim())]));
   }
 }
 
@@ -394,19 +483,88 @@ function readAttendance_(players) {
   return out;
 }
 
-/** No-shows by players named on a booking that session, newest first. One entry per booking. */
-function blackMarks_(bookings, att, since) {
-  const byDate = {};
-  bookings.forEach(b => { (byDate[b.date] = byDate[b.date] || []).push(b); });
+// ---------- black marks & bans ----------
+
+/** All black marks, newest first. Rows typed in by hand with a name but no player ID are matched by name. */
+function readMarks_(players) {
+  const sh = sheet_(MARKS, MARKS_HEADER);
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  const byId = indexBy_(players, 'id');
+  const byName = {};
+  players.forEach(p => { byName[p.name.toLowerCase()] = p.id; });
   const out = [];
-  att.forEach(a => {
-    if (a.status !== NO_SHOW || a.date < since) return;
-    (byDate[a.date] || []).forEach(b => {
-      const role = b.bookerId === a.playerId ? 'booker' : b.opponentIds.indexOf(a.playerId) !== -1 ? 'player' : '';
-      if (role) out.push({ date: a.date, playerId: a.playerId, court: b.court, start: b.start, end: b.end, role: role });
+  sh.getRange(2, 1, n, MARKS_HEADER.length).getDisplayValues().forEach((r, i) => {
+    const date = normDate_(r[MCOL.date]);
+    let pid = String(r[MCOL.player]).trim().toUpperCase();
+    if (!byId[pid]) pid = byName[cleanName_(r[MCOL.name]).toLowerCase()] || '';
+    if (!date || !pid) return;
+    let id = String(r[MCOL.id]).trim();
+    if (!id) { id = newId_(); sh.getRange(i + 2, MCOL.id + 1).setValue(id); }
+    const st = String(r[MCOL.status]).trim().toLowerCase();
+    const reasonText = String(r[MCOL.reason]).trim();
+    const reason = REASONS.filter(x => x.toLowerCase() === reasonText.toLowerCase())[0] || (reasonText ? 'Other' : 'No-show');
+    out.push({
+      id: id, date: date, playerId: pid, reason: reason,
+      sessionDate: normDate_(r[MCOL.session]), bookingId: String(r[MCOL.booking]).trim(),
+      note: String(r[MCOL.note]).trim(),
+      status: st.indexOf('clear') === 0 ? MARK_CLEARED : st.indexOf('disput') === 0 ? MARK_DISPUTED : MARK_ACTIVE,
+      statusNote: String(r[MCOL.statusNote]).trim(),
     });
   });
-  return out.sort((x, y) => (y.date + y.start).localeCompare(x.date + x.start));
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function findMarkRow_(sh, id) {
+  const n = sh.getLastRow() - 1;
+  if (n < 1 || !id) return 0;
+  const ids = sh.getRange(2, MCOL.id + 1, n, 1).getDisplayValues();
+  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]).trim() === id) return i + 2;
+  return 0;
+}
+
+/**
+ * Each player's position: bans worked out from their marks, any ban set by hand, and how close
+ * they are to the next ban. Returns { playerId: { bans: [{from, to, source}], banned, counting,
+ * nextDropOff, atRisk } } for players with any marks or a ban.
+ *
+ * Rule: walking through a player's Active and Disputed marks in date order, once "marks" of them fall
+ * within "periodDays" of each other, a ban of "banDays" starts on the date of the last one
+ * (to = from + banDays - 1, the last banned day). The marks that caused it are used up.
+ */
+function standing_(marks, players, config, today) {
+  const rule = config.ban;
+  const out = {};
+  const byPlayer = {};
+  marks.forEach(m => { if (m.status !== MARK_CLEARED) (byPlayer[m.playerId] = byPlayer[m.playerId] || []).push(m); });
+  players.forEach(p => {
+    const list = (byPlayer[p.id] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    if (!list.length && !p.bannedUntil) return;
+    const bans = [];
+    let pending = [];
+    list.forEach(m => {
+      pending = pending.filter(x => daysBetween_(x.date, m.date) < rule.periodDays);
+      pending.push(m);
+      if (pending.length >= rule.marks) {
+        bans.push({ from: m.date, to: addDays_(m.date, rule.banDays - 1), source: 'marks', markIds: pending.map(x => x.id) });
+        pending = [];
+      }
+    });
+    if (p.bannedUntil) bans.push({ from: '', to: p.bannedUntil, source: 'manual' });
+    const current = bans.filter(b => (!b.from || b.from <= today) && b.to >= today)
+      .sort((a, b) => b.to.localeCompare(a.to))[0] || null;
+    // Marks still counting towards the next ban (not used up and within the period up to today).
+    const counting = pending.filter(x => daysBetween_(x.date, today) < rule.periodDays);
+    const nextDropOff = counting.length ? addDays_(counting[0].date, rule.periodDays) : '';
+    out[p.id] = {
+      bans: bans,
+      banned: current ? { from: current.from, to: current.to, source: current.source } : null,
+      counting: counting.map(x => x.id),
+      nextDropOff: nextDropOff,
+      atRisk: !current && counting.length >= rule.marks - 1 && rule.marks > 1,
+    };
+  });
+  return out;
 }
 
 // ---------- schema & migration ----------
@@ -515,8 +673,8 @@ function settingsSheet_() {
     sh.getRange(1, 1, 30, 3).setNumberFormat('@'); // keep times and lists as plain text
     sh.getRange(1, 1, DEFAULT_SETTINGS.length, 3).setValues(DEFAULT_SETTINGS);
     sh.getRange('A1:B1').setFontWeight('bold');
-    sh.getRange('A8:C8').setFontWeight('bold');
-    sh.getRange('E8').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
+    sh.getRange('A11:C11').setFontWeight('bold');
+    sh.getRange('E11').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
       .setFontStyle('italic').setFontColor('#666666');
     sh.autoResizeColumns(1, 3);
   }
@@ -539,6 +697,9 @@ function readConfig_() {
     else if (label.indexOf('booking length') === 0) found.lengths = [values[i][1], i];
     else if (label.indexOf('start time step') === 0) found.step = [values[i][1], i];
     else if (label.indexOf('confirm player') === 0 || label.indexOf('confirm opponent') === 0) found.confirm = [values[i][1], i];
+    else if (label.indexOf('black marks for a ban') === 0) found.banMarks = [values[i][1], i];
+    else if (label.indexOf('black mark period') === 0) found.banPeriod = [values[i][1], i];
+    else if (label.indexOf('ban length') === 0) found.banDays = [values[i][1], i];
     else if (label === 'day' && dayHeader < 0) dayHeader = i;
   }
   const where = k => 'Settings tab, row ' + (found[k][1] + 1);
@@ -574,6 +735,16 @@ function readConfig_() {
     }
   }
 
+  const ban = Object.assign({}, DEFAULT_BAN);
+  [['banMarks', 'marks', 'Black marks for a ban', 1, 20], ['banPeriod', 'periodDays', 'Black mark period (days)', 1, 730],
+   ['banDays', 'banDays', 'Ban length (days)', 1, 365]].forEach(x => {
+    const f = found[x[0]];
+    if (!f || !f[0].trim()) return;
+    const v = Number(f[0]);
+    if (!(v >= x[3] && v <= x[4] && Math.floor(v) === v)) throw new Error(where(x[0]) + ': "' + x[2] + '" must be a whole number between ' + x[3] + ' and ' + x[4] + '.');
+    ban[x[1]] = v;
+  });
+
   if (dayHeader < 0) throw new Error('Settings tab: add a row with "Day | Start | Finish" headings above the session days.');
   const sessions = [];
   for (let i = dayHeader + 1; i < values.length; i++) {
@@ -591,7 +762,7 @@ function readConfig_() {
   if (!sessions.length) throw new Error('Settings tab: list at least one session day under the "Day" heading.');
   sessions.sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7)); // Monday first
 
-  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, sessions: sessions };
+  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, ban: ban, sessions: sessions };
 }
 
 function dayIndex_(text) {
