@@ -677,7 +677,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       if (opps.indexOf(opps[i]) !== i) return pname(opps[i]) + " is picked twice.";
       if (ed.bookerId && opps[i] === ed.bookerId) return pname(opps[i]) + " booked the court, so can't also be an opponent.";
     }
-    if (opps.length === 2) return "Pick 1 opponent for singles or 3 for doubles.";
     return "";
   }
   function renderResult() {
@@ -744,7 +743,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
       '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
       '<div class="field"><span class="flabel">Opponents</span><div class="opps">' + opps + '</div>' +
-      '<p class="hint">Pick 1 for singles or 3 for doubles, from the Players list. Missing someone? Add them on the Players tab.</p></div>' +
+      '<p class="hint">Up to 3, from the Players list. You don’t need to name everyone: one opponent confirms the booking. Missing someone? Add them on the Players tab.</p></div>' +
       '<div class="field statusbox"><div id="statusfield"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' +
       '<label><input type="radio" name="status" id="st-Provisional" value="Provisional"><span>Provisional</span></label>' +
       '<label><input type="radio" name="status" id="st-Confirmed" value="Confirmed"><span>Confirmed</span></label></div></div>' +

@@ -38,8 +38,8 @@ The **Players** view lists everyone who books courts, plays as an opponent or co
 
 ### Opponents and booking status
 
-- Each booking has **1 opponent** (singles) or **3** (doubles), picked from the Players list. Add new people on the Players view first.
-- A booking with opponents is **Confirmed**.
+- Each booking can name **up to 3 opponents**, picked from the Players list. You don't need to name everyone who'll play. Add new people on the Players view first.
+- A booking with at least one opponent named is **Confirmed**.
 - A booking without opponents made **more than 72 hours ahead** starts as **Provisional** (hatched, "Prov" tag), with the deadline for naming opponents. One made **inside 72 hours** starts as **Confirmed**. The 72 comes from **Confirm opponent (hours before)** in Settings.
 - When there are no opponents you can switch the status between Provisional and Confirmed yourself, for example once you've checked the club system.
 - A provisional booking still without opponents at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the opponents, mark it confirmed, or delete it.

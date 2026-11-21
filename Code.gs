@@ -97,7 +97,7 @@ function getData() {
 /**
  * Create or update one booking.
  * b = { id (omit for new), date: 'yyyy-mm-dd', court, start: 'hh:mm', minutes,
- *       bookerId, opponentIds: [player ids: none, 1 or 3], status: 'Provisional' | 'Confirmed' }
+ *       bookerId, opponentIds: [up to 3 player ids], status: 'Provisional' | 'Confirmed' }
  */
 function saveBooking(b) {
   return withLock_(() => {
@@ -134,7 +134,7 @@ function saveBooking(b) {
       if (oppIds.indexOf(pid) !== -1) throw new Error(byId[pid].name + ' is listed as an opponent twice.');
       oppIds.push(pid);
     });
-    if (oppIds.length === 2) throw new Error('Name 1 opponent for singles or 3 for doubles.');
+    // Any number of opponents up to 3 is fine: not everyone needs naming for a booking to be confirmed.
     if (oppIds.length > 3) throw new Error('A booking can have at most 3 opponents.');
 
     const s = toMin_(start), e = s + minutes;
