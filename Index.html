@@ -406,7 +406,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       .forEach(function (m) {
         pending = pending.filter(function (x) { return daysApart(x.date, m.date) < r.periodDays; });
         pending.push(m);
-        if (r.marks > 0 && pending.length >= r.marks) { var from = plusDays(m.date, 1); bans.push({ from: from, to: plusDays(from, r.banDays) }); pending = []; }
+        if (r.marks > 0 && pending.length >= r.marks) { var from = plusDays(m.date, 1); bans.push({ from: from, to: plusDays(from, r.banDays - 1), freeFrom: plusDays(from, r.banDays) }); pending = []; }
       });
     var today = S.today;
     var counting = pending.filter(function (x) { return daysApart(x.date, today) < r.periodDays; }).length;
@@ -761,16 +761,16 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var clearedCount = S.marks.length - S.marks.filter(function (m) { return m.status !== "Cleared"; }).length;
 
     var ruleText = r.marks > 0
-      ? 'As a guide, the app applies the club’s usual rule: ' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays + '-day court and lesson ban, starting the day after the last mark, and the marks that led to it are used up. Disputed marks count until the club clears them. '
+      ? 'As a guide, the app applies the club’s usual rule: ' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays + '-day court and lesson ban, starting the day after the last mark (so free to book again ' + r.banDays + ' days after it starts), and the marks that led to it are used up. Disputed marks count until the club clears them. '
       : 'Working out bans from marks is turned off in Settings. ';
     var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + ruleText +
-      'The club’s own record comes first: set a player’s “Ban ends” date with Edit to match it. Black marks and bans don’t change any bookings.</p></div>' +
+      'The club’s own record comes first: set a player’s “Free to book from” date with Edit to match it. Black marks and bans don’t change any bookings.</p></div>' +
       '<button type="button" class="btn primary" data-act="mark-new">Add black mark</button></div>';
     if (bannedNow.length || atRisk.length) {
       html += '<div class="standings">';
       if (bannedNow.length) html += '<div class="standing banned"><h3>Banned now</h3><ul>' + bannedNow.map(function (x) {
         var b = x.st.banned, starts = b.from && b.from > (S.today || '');
-        return '<li><b>' + esc(x.p.name) + '</b><span>' + (starts ? 'starts ' + fmt(b.from) + ', ' : '') + 'ends ' + fmt(b.to) + (b.source === 'manual' ? ' · from the club' : ' · worked out from marks') + '</span></li>';
+        return '<li><b>' + esc(x.p.name) + '</b><span>' + (starts ? 'from ' + fmt(b.from) + ' ' : '') + 'to ' + fmt(b.to) + ' · free from ' + fmt(b.freeFrom) + (b.source === 'manual' ? ' · club’s date' : ' · worked out from marks') + '</span></li>';
       }).join("") + '</ul></div>';
       if (atRisk.length) html += '<div class="standing risk"><h3>One mark from a ban</h3><ul>' + atRisk.map(function (x) {
         return '<li><b>' + esc(x.p.name) + '</b><span>' + x.st.counting.length + ' of ' + r.marks + (x.st.nextDropOff ? ' · first drops off ' + fmt(x.st.nextDropOff) : '') + '</span></li>';
@@ -811,12 +811,12 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var id = esc(p.id);
       if (S.renaming === p.id) {
         return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="Name">' +
-          '<label class="editlabel">Ban ends <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
+          '<label class="editlabel">Free to book from <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
           '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button>' +
-          '<p class="hint" style="flex-basis:100%">Set “Ban ends” to the end date in the club’s record. It replaces the date worked out from marks, even if it’s shorter. Leave it empty to use the worked-out date.</p></li>';
+          '<p class="hint" style="flex-basis:100%">If the player is banned, set the date the club says they can book again. It replaces the ban worked out from marks, even if it’s shorter. Leave it empty to use the worked-out ban.</p></li>';
       }
       var st = S.standing[p.id], up = upcoming[p.id] || 0, tags = '';
-      if (st && st.banned) tags += '<span class="tag warn">' + (st.banned.from && st.banned.from > (S.today || '') ? 'Ban starts ' + fmt(st.banned.from) : 'Ban ends ' + fmt(st.banned.to)) + '</span>';
+      if (st && st.banned) tags += '<span class="tag warn">' + (st.banned.from && st.banned.from > (S.today || '') ? 'Ban starts ' + fmt(st.banned.from) : 'Banned · free from ' + fmt(st.banned.freeFrom)) + '</span>';
       else if (st && st.counting.length) tags += '<span class="tag' + (st.atRisk ? ' warn' : '') + '">' + st.counting.length + ' of ' + r.marks + ' marks</span>';
       var right = S.confirmRemove === p.id
         ? '<span class="confirm">Remove ' + esc(p.name) + '?</span><button class="btn danger" data-act="remove-yes" data-id="' + id + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
@@ -859,11 +859,11 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var after = bansFrom(mk.playerId, others.concat([{ id: mk.id || 'new', playerId: mk.playerId, date: mk.date, status: mk.status }]));
     var text = "", bad = false;
     var manual = S.byId[mk.playerId] && S.byId[mk.playerId].bannedUntil;
-    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "By the usual rule, this means a ban for " + name + " from " + fmt(after.banned.from) + ", ending " + fmt(after.banned.to) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
+    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "By the usual rule, this means a ban for " + name + " from " + fmt(after.banned.from) + " to " + fmt(after.banned.to) + ", free to book again " + fmt(after.banned.freeFrom) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
     else if (!after.banned && before.banned) text = "By the usual rule, this lifts " + name + "’s ban.";
     else if (!after.banned && after.counting === r.marks - 1 && r.marks > 1) { text = name + " will be on " + after.counting + " of " + r.marks + " marks: one more means a ban."; bad = true; }
     else if (!after.banned && mk.status !== "Cleared") text = name + " will be on " + after.counting + " of " + r.marks + " marks.";
-    if (text && manual) text += " " + name + "’s ban end date is set from the club’s record (" + fmt(manual) + "), so that’s what shows.";
+    if (text && manual) text += " " + name + "’s ban is set from the club’s record (free from " + fmt(manual) + "), so that’s what shows.";
     el.textContent = text; el.className = "preview" + (bad ? " bad" : "");
   }
   function renderMarkSheet() {
@@ -999,7 +999,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     // For information only: bans never stop a booking being recorded.
     var bb = ed.bookerId && banOn(ed.bookerId, ed.date);
     var bw = $("banwarn");
-    bw.textContent = bb ? pname(ed.bookerId) + " has a ban recorded, ending " + fmt(bb.to) + "." : "";
+    bw.textContent = bb ? pname(ed.bookerId) + " has a ban recorded on this date (free to book from " + fmt(bb.freeFrom) + ")." : "";
     bw.hidden = !bb;
   }
   function playerOptions(selected, blank) {
@@ -1168,7 +1168,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       S.renaming = null;
       var change = { id: id }, msg = [];
       if (name && name !== pl.name) { change.name = name; msg.push("Renamed to " + name); }
-      if (until !== (pl.bannedUntil || "")) { change.bannedUntil = until; msg.push(until ? "Ban end date " + fmt(until) + " saved" : "Ban end date removed"); }
+      if (until !== (pl.bannedUntil || "")) { change.bannedUntil = until; msg.push(until ? "Free to book from " + fmt(until) + " saved" : "Ban date removed"); }
       if (msg.length) write("updatePlayer", change, msg.join(". "));
       else renderPlayers();
     }
