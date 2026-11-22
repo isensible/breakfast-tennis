@@ -62,7 +62,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 
 /* Session card */
 .session { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 16px; display: grid; gap: 12px; min-width: 0; }
-.session.past .session-head, .session.past .board { opacity: .62; } /* attendance stays full strength: it's filled in after play */
+.session.past .session-head, .session.past .board { opacity: .62; }
 .session-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
 .session-head h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 1.5rem; line-height: 1.1; }
 .session-head .time { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
@@ -187,7 +187,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 @media (max-width: 460px) { .opps { grid-template-columns: minmax(0, 1fr); } }
 .opps select { width: 100%; min-width: 0; }
 
-/* Attendance */
+/* Collapsible session sections (sign-ups) */
 .att { border-top: 1px solid var(--line); padding-top: 10px; }
 .att summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; list-style: none; }
 .att summary::-webkit-details-marker { display: none; }
@@ -195,24 +195,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .att[open] summary::before { content: "▾"; }
 .att-title { font-family: var(--display); font-weight: 700; font-size: 1.15rem; }
 .att-sum { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
-.att-sum .bad { color: var(--warn); font-weight: 600; }
 .att-body { display: grid; gap: 10px; margin-top: 10px; }
-.att-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; border-top: 1px solid var(--line); }
-.att-row:first-child { border-top: 0; }
-.att-who { flex: 1 1 180px; min-width: 0; display: grid; }
-.att-name { font-weight: 600; overflow-wrap: anywhere; }
-.att-role { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.att-role .mark { color: var(--warn); font-weight: 600; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); padding: 5px 11px; font-weight: 500; font-size: .88rem; color: var(--muted); }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg .yes[aria-pressed="true"] { background: var(--court); color: var(--court-ink); }
-.seg .no[aria-pressed="true"] { background: var(--warn); color: var(--surface); }
-.x { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; padding: 2px 6px; border-radius: 6px; }
-.x:hover { color: var(--warn); }
 .att-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.att-foot select { flex: 1 1 200px; min-width: 0; }
 
 /* Players view */
 .people .pid { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
@@ -264,8 +248,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .banwarn { color: var(--muted); font-size: .9rem; margin: 0; }
 .preview { margin: 0; font-weight: 600; }
 .preview.bad { color: var(--warn); }
-.att-role .linklike { font-size: inherit; }
-.att-row .btn.small { padding: 3px 9px; font-size: .82rem; }
 .people .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .people input[type="date"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .people .editlabel { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--muted); }
@@ -331,7 +313,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     loaded: false, busy: false, today: null, skew: 0,
     players: [], byId: {},
     bookings: [],      // {id, date, court, start, end, minutes, status, bookerId, opponentIds, startsAt}
-    attendance: [],    // {date, playerId, status: "Attended" | "No-show" | "", added}
     marks: [],         // black marks: {id, date, playerId, reason, sessionDate, bookingId, note, status, statusNote}
     standing: {},      // per player: {bans: [{from, to, source, markIds}], banned, counting, nextDropOff, atRisk}
     mark: null,        // black mark being added or edited
@@ -340,7 +321,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     openSign: {},
     showCleared: false,
     weekStart: mondayOf(new Date()),
-    tab: "sessions", edit: null, openAtt: {}, query: "", renaming: null, confirmRemove: null
+    tab: "sessions", edit: null, query: "", renaming: null, confirmRemove: null
   };
 
   // ---------- dates & times ----------
@@ -458,25 +439,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     return { start: t, next: next };
   }
 
-  // ---------- attendance ----------
-  function attRow(date, pid) { return S.attendance.filter(function (a) { return a.date === date && a.playerId === pid; })[0]; }
-  // Everyone named on that session's bookings, plus anyone else with an attendance record.
-  function sessionPlayers(date) {
-    var map = {}, out = [];
-    function get(pid) {
-      if (!map[pid]) { map[pid] = { id: pid, roles: [], status: "", added: false, onBooking: false }; out.push(map[pid]); }
-      return map[pid];
-    }
-    S.bookings.filter(function (b) { return b.date === date; })
-      .sort(function (a, b) { return (a.start + pad(a.court)).localeCompare(b.start + pad(b.court)); })
-      .forEach(function (b) {
-        var r = get(b.bookerId); r.onBooking = true; r.roles.push("Court " + b.court + " " + b.start + " · booker");
-        b.opponentIds.forEach(function (pid) { var o = get(pid); o.onBooking = true; o.roles.push("Court " + b.court + " " + b.start + " · player"); });
-      });
-    S.attendance.filter(function (a) { return a.date === date; }).forEach(function (a) { var r = get(a.playerId); r.status = a.status; r.added = a.added; });
-    return out.sort(function (a, b) { return pname(a.id).localeCompare(pname(b.id)); });
-  }
-
   // ---------- data ----------
   function applyConfig(cfg) {
     CFG = cfg;
@@ -499,7 +461,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     S.players = data.players;
     S.byId = {}; S.players.forEach(function (p) { S.byId[p.id] = p; });
     S.bookings = data.bookings;
-    S.attendance = data.attendance || [];
     S.marks = data.marks || [];
     S.standing = data.standing || {};
     S.signups = {}; (data.signups || []).forEach(function (x) { S.signups[x.date] = x.names; });
@@ -625,8 +586,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         (n.prov ? '<span class="key"><i class="k-prov"></i><b>' + n.prov + '</b> provisional</span>' : '') +
         (n.risk ? '<span class="key"><i class="k-risk"></i><b>' + n.risk + '</b> may be cancelled</span>' : '') + '</span></div>' +
         '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div>' +
-        renderSignups(date, booked) +
-        (locked ? '' : renderAttendance(date)) + '</article>';
+        renderSignups(date, booked) + '</article>';
     }).join("");
     $("tally").textContent = shortSessions ? plural(shortSessions, "session") + " short of courts" : "";
   }
@@ -730,51 +690,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '</div></details>';
   }
 
-  function renderAttendance(date) {
-    var list = sessionPlayers(date);
-    var n = { Attended: 0, "No-show": 0, none: 0 };
-    list.forEach(function (p) { n[p.status || "none"]++; });
-    var sum = list.length
-      ? plural(list.length, "player") + " · " + n.Attended + " attended" +
-        (n["No-show"] ? ' · <span class="bad">' + n["No-show"] + " no-show</span>" : "") +
-        (n.none ? " · " + n.none + " not checked" : "")
-      : "No players yet";
-    var rows = list.map(function (p) {
-      var nm = esc(pname(p.id));
-      var role = p.roles.length ? p.roles.map(esc).join("<br>") : p.added ? "Added to this session" : "Not on a booking";
-      var mk = S.marks.filter(function (m) { return m.playerId === p.id && m.sessionDate === date; })[0];
-      var markBtn = "";
-      if (mk) role += ' · <button type="button" class="linklike mark" data-act="mark-open" data-id="' + esc(mk.id) + '">black mark' + (mk.status === "Cleared" ? ' (cleared)' : mk.status === "Disputed" ? ' (disputed)' : '') + '</button>';
-      else if (p.status === "No-show") markBtn = '<button type="button" class="btn small" data-act="mark-new" data-pid="' + esc(p.id) + '" data-date="' + date + '">Add black mark</button>';
-      return '<li class="att-row"><div class="att-who"><span class="att-name">' + nm + '</span><span class="att-role">' + role + '</span></div>' +
-        '<div class="seg" role="group" aria-label="Attendance for ' + nm + '">' +
-        '<button type="button" class="yes" aria-pressed="' + (p.status === "Attended") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="Attended">Attended</button>' +
-        '<button type="button" class="no" aria-pressed="' + (p.status === "No-show") + '" data-act="att-set" data-date="' + date + '" data-pid="' + esc(p.id) + '" data-st="No-show">No-show</button></div>' +
-        markBtn +
-        (p.onBooking ? '' : '<button type="button" class="x" data-act="att-remove" data-date="' + date + '" data-pid="' + esc(p.id) + '" aria-label="Remove ' + nm + ' from this session">×</button>') +
-        '</li>';
-    }).join("");
-    var listed = {}; list.forEach(function (p) { listed[p.id] = true; });
-    var others = S.players.filter(function (p) { return !listed[p.id]; });
-    return '<details class="att" data-att="' + date + '"' + (S.openAtt[date] ? ' open' : '') + '>' +
-      '<summary><span class="att-title">Attendance</span><span class="att-sum">' + sum + '</span></summary><div class="att-body">' +
-      (list.length ? '<ul class="att-list">' + rows + '</ul>' : '<p class="empty">No one booked yet.</p>') +
-      '<div class="att-foot"><select id="addatt-' + date + '" aria-label="Add a player who came to this session">' +
-      '<option value="">Add a player who came…</option>' + others.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("") + '</select>' +
-      '<button type="button" class="btn" data-act="att-add" data-date="' + date + '">Add</button>' +
-      (n.none ? '<button type="button" class="btn" data-act="att-all" data-date="' + date + '">Mark the rest attended</button>' : '') +
-      '</div></div></details>';
-  }
-
-  function setAtt(date, entries, msg) {
-    entries.forEach(function (e) {
-      S.attendance = S.attendance.filter(function (a) { return !(a.date === date && a.playerId === e.playerId); });
-      if (!e.remove && (e.status || e.added)) S.attendance.push({ date: date, playerId: e.playerId, status: e.status || "", added: !!e.added });
-    });
-    renderSessions();
-    write("setAttendance", { date: date, entries: entries }, msg);
-  }
-
   // ---------- render: players ----------
   function renderMarks() {
     var r = rule(), spent = spentMarks();
@@ -871,8 +786,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     S.bookings.filter(function (b) { return b.date <= todayStr && (b.bookerId === pid || b.opponentIds.indexOf(pid) !== -1); })
       .sort(function (a, b) { return (b.date + b.start).localeCompare(a.date + a.start); })
       .forEach(function (b) { out.push({ key: b.date + '|' + b.id, label: fmt(b.date) + ' · Court ' + b.court + ' ' + b.start + (b.bookerId === pid ? ' (booker)' : '') }); seen[b.date] = true; });
-    S.attendance.filter(function (a) { return a.playerId === pid && a.date <= todayStr && !seen[a.date]; })
-      .forEach(function (a) { out.push({ key: a.date + '|', label: fmt(a.date) + ' session' }); });
     return out;
   }
   function markPreview() {
@@ -1167,21 +1080,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     }
     if (a === "delete") deleteBooking();
     else if (a === "go-players") { S.edit = null; renderSheet(); S.tab = "players"; render(); }
-    else if (a === "att-set") {
-      var cur = attRow(date, pid), st = act.dataset.st;
-      var next = cur && cur.status === st ? "" : st;
-      setAtt(date, [{ playerId: pid, status: next, added: cur ? cur.added : false }]);
-    }
-    else if (a === "att-remove") setAtt(date, [{ playerId: pid, remove: true }], pname(pid) + " removed from the session");
-    else if (a === "att-add") {
-      var sel = $("addatt-" + date);
-      if (!sel || !sel.value) { toast("Pick a player to add."); return; }
-      setAtt(date, [{ playerId: sel.value, status: "Attended", added: true }], pname(sel.value) + " added as attended");
-    }
-    else if (a === "att-all") {
-      var rest = sessionPlayers(date).filter(function (p) { return !p.status; });
-      setAtt(date, rest.map(function (p) { return { playerId: p.id, status: "Attended", added: p.added }; }), plural(rest.length, "player") + " marked attended");
-    }
     else if (a === "rename") { S.renaming = id; S.confirmRemove = null; renderPlayers(); var inp = $("rename-" + id); if (inp) { inp.focus(); inp.select(); } }
     else if (a === "rename-cancel") { S.renaming = null; renderPlayers(); }
     else if (a === "rename-save") {
@@ -1224,7 +1122,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   document.addEventListener("toggle", function (e) {
     var el = e.target;
     if (el.classList && el.classList.contains("signups")) S.openSign[el.dataset.sign] = el.open;
-    else if (el.classList && el.classList.contains("att")) S.openAtt[el.dataset.att] = el.open;
   }, true);
   document.addEventListener("input", function (e) {
     if (!(e.target.classList && e.target.classList.contains("sign-area"))) return;

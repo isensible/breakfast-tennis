@@ -1,6 +1,6 @@
 # Breakfast Tennis court bookings — setup
 
-A small web app for the admin team to record court bookings and attendance for Breakfast Tennis sessions. Each session shows one lane per court on a time axis, with the published session times marked, so it's easy to see which courts are covered for the whole session, partly covered, or free. Data is stored in a Google Sheet; the page is served by Google Apps Script.
+A small web app for the admin team to record court bookings, sign-ups and black marks for Breakfast Tennis sessions. Each session shows one lane per court on a time axis, with the published session times marked, so it's easy to see which courts are covered for the whole session, partly covered, or free. Data is stored in a Google Sheet; the page is served by Google Apps Script.
 
 Bookings are individual time slots: a court can have several in one session (for example 06:00–07:00 and 07:00–08:30), and a booking may start before or finish after the session's published times, as long as it overlaps the session.
 
@@ -12,7 +12,7 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ## Setup (about 10 minutes)
 
-1. Create a new Google Sheet (or open your existing tracker). The app adds six tabs, **Settings**, **Players**, **Bookings**, **Attendance**, **Black marks** and **Sign-ups**, and never touches other tabs.
+1. Create a new Google Sheet (or open your existing tracker). The app adds five tabs, **Settings**, **Players**, **Bookings**, **Black marks** and **Sign-ups**, and never touches other tabs.
 2. In the sheet: **Extensions → Apps Script**.
 3. Replace the contents of `Code.gs` with this `Code.gs`.
 4. Click **+ → HTML**, name it `Index` (exactly), and paste in `Index.html`.
@@ -32,10 +32,10 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ### Players
 
-The **Players** view lists everyone who books courts, plays on a booking or comes to sessions. Each player has a fixed ID (P0001, P0002 …) that bookings and attendance use, so renaming a player updates them everywhere.
+The **Players** view lists everyone who books courts or plays on a booking. Each player has a fixed ID (P0001, P0002 …) that bookings and attendance use, so renaming a player updates them everywhere.
 
 - **Booker**: tick for the people who book courts. Only bookers appear under "Booked by" in the booking form.
-- **Rename** and **Remove**: a player who is on a booking or an attendance record can't be removed; untick Booker instead.
+- **Rename** and **Remove**: a player who is on a booking or has a black mark can't be removed; untick Booker instead.
 - Names must be unique; add an initial to tell two people apart.
 
 ### Players on a booking and booking status
@@ -53,18 +53,11 @@ Players sign up for each session through a WhatsApp poll. Each session card has 
 
 - Paste the names from the poll into the box, one per line. Numbering, bullets, WhatsApp chat prefixes ("[21/11/2026, 19:02] Ann: …") and "(you)" are tidied away; blank lines and repeated names are ignored. A single line of names separated by commas also works.
 - It shows how many signed up, the courts needed at 4 players a court (for 13 players, "3–4": three full courts with one over, or four to fit everyone), how many courts are already booked, and a short verdict: "Book 1 more", "1 over · book 1 more", "3 spaces free", "Just right" or "1 spare".
-- Names that aren't on the Players list are shown dashed with **+ Add**. They still count; add them if they'll be named on bookings or attendance.
+- Names that aren't on the Players list are shown dashed with **+ Add**. They still count; add them if they'll be named on bookings.
 
 The screens keep text short; this README has the detail.
 - **Save sign-ups** keeps the list with the session so the other admins see the same count. Saving an empty box removes it.
 - Sign-ups work for sessions whose bookings haven't opened yet.
-
-### Attendance
-
-- Each session has an **Attendance** section (tap to open). It lists everyone named on that session's bookings, as booker or player.
-- Mark each person **Attended** or **No-show**; tap again to clear. **Mark the rest attended** fills in everyone not yet checked.
-- **Add a player who came** adds someone from the Players list who wasn't on a booking; they're marked attended. Remove them with ×.
-- A No-show doesn't create a black mark by itself. Next to a No-show there's **Add black mark**, which opens the black mark form with the player, session and reason filled in.
 
 ### Black marks and bans
 
@@ -132,6 +125,10 @@ The message under the title names the Google account the app is running as, and 
 
 After editing, use **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
 
+### Earlier versions
+
+The app no longer uses an **Attendance** tab. If your sheet has one from an earlier version, it's left alone; delete it whenever you like.
+
 ### Upgrading from the version with a Bookers tab
 
 The first time anyone loads the new version, the sheet is converted automatically:
@@ -153,8 +150,6 @@ An older **Settings** tab keeps working.
 - **Status** is `Provisional` or `Confirmed`.
 - **Booker** and **Players** hold player IDs (players separated by commas). On a row you add by hand you can leave them blank and type names under **Booker name** / **Player names** instead; they're matched to the Players list.
 - Leave **ID** blank on rows you add; the app fills it in.
-
-**Attendance**: Date | Player | Status | Added | Name | Updated | Updated by. Status is `Attended` or `No-show`; Added is `Yes` for players who weren't on a booking.
 
 **Sign-ups**: Date | Names | Count | Updated | Updated by. Names are one per line; Count is filled in by the app.
 

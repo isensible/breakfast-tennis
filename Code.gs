@@ -3,24 +3,21 @@
  *
  * Tabs in the spreadsheet this script is bound to (created automatically; other tabs are never touched):
  *   Settings:   book-ahead days, courts, booking lengths, start step, confirm hours, ban rule, session times
- *   Players:    ID | Name | Booker | Free to book from   — everyone who books, plays on a booking, or attends
+ *   Players:    ID | Name | Booker | Free to book from   — everyone who books or plays on a booking
  *   Bookings:   Date | Court | Start | Finish | Minutes | Status | Booker | Players |
  *               Booker name | Player names | Updated | Updated by | ID
  *               ("Players" here means the people named on the booking besides the booker.)
- *   Attendance: Date | Player | Status | Added | Name | Updated | Updated by
  *   Black marks: ID | Date | Player | Reason | Session | Booking | Note | Status | Status note |
  *               Player name | Updated | Updated by
  *   Sign-ups:   Date | Names | Count | Updated | Updated by   — names pasted from the WhatsApp poll, one per line
  *
- * Bookings and attendance refer to players by ID; the name columns are only there to make
+ * Bookings and black marks refer to players by ID; the name columns are only there to make
  * the sheet readable, and are refreshed whenever a player is renamed.
  *
  * Booking status:
  *   A booking with players named is Confirmed. Without them it is Provisional if it was made
  *   more than "Confirm players (hours before)" ahead, otherwise Confirmed. A Provisional booking
  *   past that deadline may have been cancelled by the club; the app flags it but doesn't block anything.
- *
- * Attendance is per session (date) and player.
  *
  * The club is the system of record for bookings, black marks and bans; this app is the admins' working
  * copy, so black marks and bans never block or change anything about bookings. They're information only.
@@ -36,12 +33,11 @@
  * replaces the worked-out ban for that player, whether longer, shorter or already over.
  */
 
-const LOOKBACK_DAYS = 56;     // bookings and attendance the page loads
+const LOOKBACK_DAYS = 56;     // how far back the page loads bookings
 const CLEARED_DAYS = 365;     // how far back cleared black marks are loaded (active ones always are)
 const SETTINGS = 'Settings';
 const BOOKINGS = 'Bookings';
 const PLAYERS = 'Players';
-const ATTENDANCE = 'Attendance';
 const OLD_BOOKERS = 'Bookers';
 const MARKS = 'Black marks';
 const SIGNUPS = 'Sign-ups';
@@ -57,9 +53,7 @@ const MCOL = { id: 0, date: 1, player: 2, reason: 3, session: 4, booking: 5, not
   name: 9, updated: 10, by: 11 };
 const REASONS = ['No-show', 'Late', 'System fault', 'Other'];
 const MARK_ACTIVE = 'Active', MARK_DISPUTED = 'Disputed', MARK_CLEARED = 'Cleared';
-const ATTENDANCE_HEADER = ['Date', 'Player', 'Status', 'Added', 'Name', 'Updated', 'Updated by'];
 const PROVISIONAL = 'Provisional', CONFIRMED = 'Confirmed';
-const ATTENDED = 'Attended', NO_SHOW = 'No-show';
 
 // Defaults written to a new Settings tab. Edit the tab, not these.
 const DEFAULT_SETTINGS = [
@@ -101,7 +95,6 @@ function doGet() {
 function setup() {
   settingsSheet_();
   ensureSchema_();
-  sheet_(ATTENDANCE, ATTENDANCE_HEADER);
   sheet_(MARKS, MARKS_HEADER);
   sheet_(SIGNUPS, SIGNUPS_HEADER);
 }
@@ -113,7 +106,6 @@ function getData() {
   const config = readConfig_();
   const players = readPlayers_();
   const all = readBookings_(players);
-  const att = readAttendance_(players);
   const marks = readMarks_(players);
   const today = today_();
   const since = addDays_(today, -LOOKBACK_DAYS);
@@ -124,7 +116,6 @@ function getData() {
     config: config,
     players: players.map(p => ({ id: p.id, name: p.name, booker: p.booker, bannedUntil: p.bannedUntil })),
     bookings: all.filter(b => b.date >= since),
-    attendance: att.filter(a => a.date >= since),
     marks: marks.filter(m => m.status !== MARK_CLEARED || m.date >= clearedSince),
     standing: standing_(marks, players, config, today),
     signups: readSignups_().filter(x => x.date >= since),
@@ -345,51 +336,14 @@ function removePlayer(id) {
     const player = players.filter(x => x.id === String(id))[0];
     if (!player) return;
     const used = readBookings_(players).filter(b => b.bookerId === player.id || b.opponentIds.indexOf(player.id) !== -1).length;
-    const attended = readAttendance_(players).filter(a => a.playerId === player.id).length;
     const marked = readMarks_(players).filter(m => m.playerId === player.id).length;
     const parts = [];
     if (used) parts.push(used + ' booking' + (used === 1 ? '' : 's'));
-    if (attended) parts.push(attended + ' attendance record' + (attended === 1 ? '' : 's'));
     if (marked) parts.push(marked + ' black mark' + (marked === 1 ? '' : 's'));
     if (parts.length) {
       throw new Error(player.name + ' has ' + parts.join(' and ') + ', so can’t be removed. Untick Booker if they no longer book courts.');
     }
     playersSheet_().deleteRow(player.row);
-  });
-}
-
-/**
- * Record attendance for one session.
- * p = { date, entries: [{ playerId, status: 'Attended' | 'No-show' | '', added: bool, remove: bool }] }
- * "added" marks a player who wasn't named on a booking. "remove" deletes that player's row for the session.
- */
-function setAttendance(p) {
-  return withLock_(() => {
-    const config = readConfig_();
-    const date = String(p.date || '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date.');
-    if (!config.sessions.some(s => s.dow === dow_(date))) throw new Error('There is no Breakfast Tennis session on that day.');
-    const byId = indexBy_(readPlayers_(), 'id');
-    const sh = sheet_(ATTENDANCE, ATTENDANCE_HEADER);
-    const n = sh.getLastRow() - 1;
-    const rows = n > 0 ? sh.getRange(2, 1, n, 4).getDisplayValues() : [];
-    const rowOf = {};
-    rows.forEach((r, i) => { if (normDate_(r[0]) === date) rowOf[String(r[1]).trim()] = { row: i + 2, added: isYes_(r[3]) }; });
-
-    const appends = [], deletes = [], when = new Date(), who = userEmail_();
-    (p.entries || []).forEach(e => {
-      const pid = String(e.playerId || '');
-      if (!byId[pid]) throw new Error('A player is no longer on the Players list. Reload and try again.');
-      const status = e.status === ATTENDED || e.status === NO_SHOW ? e.status : '';
-      const cur = rowOf[pid];
-      const added = e.added != null ? !!e.added : !!(cur && cur.added);
-      if (e.remove || (!status && !added)) { if (cur) deletes.push(cur.row); return; }
-      const values = [date, pid, status, added ? 'Yes' : '', byId[pid].name, when, who];
-      if (cur) sh.getRange(cur.row, 1, 1, values.length).setValues([values]);
-      else appends.push(values);
-    });
-    deletes.sort((a, b) => b - a).forEach(r => sh.deleteRow(r));
-    if (appends.length) sh.getRange(sh.getLastRow() + 1, 1, appends.length, ATTENDANCE_HEADER.length).setValues(appends);
   });
 }
 
@@ -441,7 +395,7 @@ function checkNewName_(name, players, selfId) {
   if (clash) throw new Error(name + ' is already on the Players list (' + clash.id + '). Add an initial to tell them apart.');
 }
 
-/** Rewrite the readable name columns in Bookings and Attendance after a rename. */
+/** Rewrite the readable name columns in Bookings and Black marks after a rename. */
 function refreshNames_(players) {
   const byId = indexBy_(players, 'id');
   const b = bookingsSheet_();
@@ -450,12 +404,6 @@ function refreshNames_(players) {
     const ids = b.getRange(2, COL.booker + 1, nb, 2).getDisplayValues();
     const names = ids.map(r => [nameOf_(byId, String(r[0]).trim()), splitIds_(r[1]).map(id => nameOf_(byId, id)).join(', ')]);
     b.getRange(2, COL.bookerName + 1, nb, 2).setValues(names);
-  }
-  const a = sheet_(ATTENDANCE, ATTENDANCE_HEADER);
-  const na = a.getLastRow() - 1;
-  if (na > 0) {
-    const ids = a.getRange(2, 2, na, 1).getDisplayValues();
-    a.getRange(2, 5, na, 1).setValues(ids.map(r => [nameOf_(byId, String(r[0]).trim())]));
   }
   const m = sheet_(MARKS, MARKS_HEADER);
   const nm = m.getLastRow() - 1;
@@ -524,28 +472,6 @@ function findRowById_(sh, id) {
   const ids = sh.getRange(2, COL.id + 1, n, 1).getDisplayValues();
   for (let i = 0; i < ids.length; i++) if (String(ids[i][0]).trim() === id) return i + 2;
   return 0;
-}
-
-// ---------- attendance ----------
-
-function readAttendance_(players) {
-  const sh = sheet_(ATTENDANCE, ATTENDANCE_HEADER);
-  const n = sh.getLastRow() - 1;
-  if (n < 1) return [];
-  const byId = indexBy_(players, 'id');
-  const byName = {};
-  players.forEach(p => { byName[p.name.toLowerCase()] = p.id; });
-  const out = [];
-  sh.getRange(2, 1, n, 5).getDisplayValues().forEach(r => {
-    const date = normDate_(r[0]);
-    let pid = String(r[1]).trim().toUpperCase();
-    if (!byId[pid]) pid = byName[cleanName_(r[4]).toLowerCase()] || '';
-    if (!date || !pid) return;
-    const s = String(r[2]).trim().toLowerCase().replace(/[\s_]/g, '-');
-    const status = /^(attended|yes|present|y)$/.test(s) ? ATTENDED : /^(no-show|noshow|no|absent|n|dns)$/.test(s) ? NO_SHOW : '';
-    out.push({ date: date, playerId: pid, status: status, added: isYes_(r[3]) });
-  });
-  return out;
 }
 
 // ---------- black marks & bans ----------
@@ -730,7 +656,6 @@ function migrate_(layout) {
       x.opps.length ? CONFIRMED : PROVISIONAL, x.bookerId, x.opps.join(', '),
       nameOf_(byId, x.bookerId), x.opps.map(p => nameOf_(byId, p)).join(', '), x.updated, x.by, x.id]));
   }
-  sheet_(ATTENDANCE, ATTENDANCE_HEADER);
 }
 
 // ---------- settings ----------
@@ -889,7 +814,6 @@ function sheet_(name, header) {
     sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
     sh.setFrozenRows(1);
     if (name === BOOKINGS) sh.getRange('A:D').setNumberFormat('@');   // dates and times as plain text
-    if (name === ATTENDANCE) sh.getRange('A:A').setNumberFormat('@');
     if (name === SIGNUPS) sh.getRange('A:A').setNumberFormat('@');
   }
   return sh;
