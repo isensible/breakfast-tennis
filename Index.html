@@ -94,6 +94,7 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .lane { position: relative; height: 30px; border-radius: 6px; background: var(--lane); cursor: copy; overflow: hidden; }
 .lane.locked { cursor: not-allowed; }
 .win { position: absolute; top: 0; bottom: 0; background: var(--window); border: 1.5px dashed var(--line); border-radius: 6px; pointer-events: none; }
+.pdiv { position: absolute; top: 4px; bottom: 4px; width: 0; border-left: 1.5px dotted var(--line); }
 .blk {
   position: absolute; top: 3px; bottom: 3px; border: 0; border-radius: 5px; padding: 0 7px;
   background: var(--court); color: var(--court-ink); font-size: .8rem; font-weight: 600; text-align: left;
@@ -583,6 +584,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       }
 
       var n = { full: 0, part: 0, free: 0, prov: 0, risk: 0 }, rows = [];
+      // Faint lines where the session's periods change (players move courts between them).
+      var dividers = sessionPeriods(s).slice(1).map(function (p) { return '<i class="pdiv" style="left:' + ((p.a - s.start) / (s.end - s.start) * 100).toFixed(3) + '%"></i>'; }).join("");
       for (var c = 1; c <= CFG.courts; c++) {
         var list = courtBookings(date, c);
         var cov = coverage(list, s.start, s.end);
@@ -603,11 +606,11 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         }).join("");
         rows.push('<div class="row"><span class="num ' + cov + '" title="' + (cov === "full" ? "Covered" : cov === "part" ? "Partly covered" : "Not booked") + '">' + c + '</span>' +
           '<div class="lane' + (locked ? ' locked' : '') + '" data-date="' + date + '" data-court="' + c + '" data-a0="' + a0 + '" data-span="' + span + '">' +
-          '<div class="win" style="left:' + pct(s.start) + ';width:' + ((s.end - s.start) / span * 100).toFixed(3) + '%"></div>' + blocks + '</div>' +
+          '<div class="win" style="left:' + pct(s.start) + ';width:' + ((s.end - s.start) / span * 100).toFixed(3) + '%">' + dividers + '</div>' + blocks + '</div>' +
           '<button class="add" data-date="' + date + '" data-court="' + c + '" aria-label="Add a booking on court ' + c + '"' + (locked ? ' disabled' : '') + '>+</button></div>');
       }
-      var booked = n.full + n.part;
-      if (courtMaths(parseNames(signText(date)).length, booked).cls === "bad") shortSessions++;
+      var booked = periodCourts(date, s);   // courts booked for the whole of each period
+      if (courtsFit(parseNames(signText(date)).length, booked).cls === "bad") shortSessions++;
 
       var past = Date.now() > new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, Math.max(s.end, a1)).getTime();
       var chip = "";
@@ -664,15 +667,41 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     else { verdict = (booked - most) + " spare"; cls = "ok"; }
     return { per: per, full: full, over: over, most: most, verdict: verdict, cls: cls };
   }
+  // A session splits into equal periods; players change courts between them.
+  function sessionPeriods(s) {
+    var k = CFG.periods || 3, len = (s.end - s.start) / k, out = [];
+    for (var i = 0; i < k; i++) out.push({ a: Math.round(s.start + i * len), b: Math.round(s.start + (i + 1) * len) });
+    return out;
+  }
+  // Courts booked for the whole of each period.
+  function periodCourts(date, s) {
+    return sessionPeriods(s).map(function (p) {
+      var n = 0;
+      for (var c = 1; c <= CFG.courts; c++) if (coverage(courtBookings(date, c), p.a, p.b) === "full") n++;
+      return n;
+    });
+  }
+  // Players against courts per period: the tightest period decides, and is named when periods differ.
+  function courtsFit(players, pc) {
+    var min = Math.min.apply(null, pc), m = courtMaths(players, min);
+    var same = pc.every(function (x) { return x === pc[0]; });
+    var verdict = m.verdict;
+    if (m.cls === "bad" && !same) {
+      var need = min < m.full ? m.full : m.most;
+      var shortP = pc.map(function (x, i) { return x < need ? i + 1 : 0; }).filter(Boolean);
+      verdict = (shortP.length === 1 ? "Period " : "Periods ") + shortP.join(", ") + ": " + verdict.charAt(0).toLowerCase() + verdict.slice(1);
+    }
+    return { min: min, label: same ? String(pc[0]) : pc.join(" / "), same: same, m: m, verdict: verdict, cls: m.cls };
+  }
   function signText(date) {
     return S.signDraft[date] != null ? S.signDraft[date] : (S.signups[date] || []).join("\n");
   }
   function signResults(date, booked) {
-    var names = parseNames(signText(date)), m = courtMaths(names.length, booked);
+    var names = parseNames(signText(date)), f = courtsFit(names.length, booked), m = f.m;
     return '<div class="sign-figures"><div><b>' + names.length + '</b><span>signed up</span></div>' +
       '<div><b>' + (m.over ? m.full + '–' + m.most : m.most) + '</b><span>courts needed</span></div>' +
-      '<div><b>' + booked + '</b><span>booked</span></div></div>' +
-      (m.verdict ? '<p class="sign-verdict ' + m.cls + '">' + esc(m.verdict) + '</p>' : '') +
+      '<div><b>' + f.label + '</b><span>' + (f.same ? 'booked' : 'booked per period') + '</span></div></div>' +
+      (f.verdict ? '<p class="sign-verdict ' + f.cls + '">' + esc(f.verdict) + '</p>' : '') +
       (names.length ? '<div class="names">' + names.map(function (n) {
         return playerByName(n) ? '<span>' + esc(n) + '</span>'
           : '<span class="unknown" title="Not on the Players list">' + esc(n) + '<button type="button" data-act="sign-addplayer" data-name="' + esc(n) + '" aria-label="Add ' + esc(n) + ' to the Players list">+ Add</button></span>';
@@ -683,16 +712,16 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var n = parseNames(signText(date)).length;
     return n ? plural(n, "name") : "None yet";
   }
-  // Session header: players signed up against courts booked (max players a court), and whether that's enough.
+  // Session header: players signed up against courts booked in each period, and whether that's enough.
   function headCount(date, booked) {
-    var players = parseNames(signText(date)).length, m = courtMaths(players, booked);
+    var players = parseNames(signText(date)).length, f = courtsFit(players, booked);
     return (players ? '<span class="key"><b>' + players + '</b> ' + (players === 1 ? 'player' : 'players') + '</span>' : '<span class="key">No sign-ups</span>') +
-      '<span class="key"><b>' + booked + '</b> ' + (booked === 1 ? 'court' : 'courts') + '</span>' +
-      (m.verdict ? '<span class="key verdict ' + m.cls + '">' + esc(m.verdict) + '</span>' : '');
+      '<span class="key" title="' + (f.same ? '' : 'Courts booked in each period') + '"><b>' + f.label + '</b> ' + (f.same && f.min === 1 ? 'court' : 'courts') + '</span>' +
+      (f.verdict ? '<span class="key verdict ' + f.cls + '">' + esc(f.verdict) + '</span>' : '');
   }
   function renderSignups(date, booked) {
     var dirty = S.signDraft[date] != null && S.signDraft[date] !== (S.signups[date] || []).join("\n");
-    return '<details class="att signups" data-sign="' + date + '" data-booked="' + booked + '"' + (S.openSign[date] ? ' open' : '') + '>' +
+    return '<details class="att signups" data-sign="' + date + '" data-booked="' + booked.join(",") + '"' + (S.openSign[date] ? ' open' : '') + '>' +
       '<summary><span class="att-title">Sign-ups</span><span class="att-sum" id="signsum-' + date + '">' + signSummary(date) + '</span></summary><div class="att-body">' +
       '<textarea class="sign-area" id="sign-' + date + '" data-date="' + date + '" aria-label="Names from the WhatsApp poll, one per line" placeholder="Paste names from the WhatsApp poll">' + esc(signText(date)) + '</textarea>' +
       '<div id="signres-' + date + '">' + signResults(date, booked) + '</div>' +
@@ -1200,7 +1229,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   document.addEventListener("input", function (e) {
     if (!(e.target.classList && e.target.classList.contains("sign-area"))) return;
     // Recount as you type, without redrawing the text box.
-    var d = e.target.dataset.date, booked = Number(e.target.closest("details").dataset.booked);
+    var d = e.target.dataset.date, booked = e.target.closest("details").dataset.booked.split(",").map(Number);
     S.signDraft[d] = e.target.value;
     $("signres-" + d).innerHTML = signResults(d, booked);
     $("signsum-" + d).innerHTML = signSummary(d);

@@ -27,7 +27,8 @@ Bookings are individual time slots: a court can have several in one session (for
 - **Change or delete a booking:** tap the green block.
 - The form shows the finish time, notes when a booking starts before or runs past the session, and won't save if it clashes with another booking on that court.
 - Court numbers are coloured by coverage of the published session: green = covered, yellow = partly, dashed = free.
-- Each session's header shows players (from its sign-ups) against courts booked, with a verdict at 4 players a court, such as "2 over · book 1 more" or "1 space free". The week line says how many sessions are short of courts.
+- Each session is split into **periods** (3 by default), each a short timed match after which players change courts. Dotted lines on each court mark them. A court counts for a period only if it's booked for the whole of it.
+- Each session's header shows players (from its sign-ups) against courts booked per period, with a verdict at 4 players a court: for example "18 players · 5 / 5 / 4 courts · Period 3: 2 over · book 1 more". When every period has the same number of courts it just says "4 courts". The week line says how many sessions are short of courts.
 
 ### Players
 
@@ -92,6 +93,7 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Black mark period (days) | 90 | How many days black marks count for. If missing, 90. |
 | Ban length (days) | 30 | How many days a ban lasts, starting the day after the last mark; the player is free to book again the day after. If missing, 30. |
 | Players per court | 4 | Used by Sign-ups to work out courts needed. If missing, 4. |
+| Periods per session | 3 | How many equal periods a session is split into for counting courts. If missing, 3. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:

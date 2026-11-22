@@ -73,6 +73,7 @@ const DEFAULT_SETTINGS = [
   ['Black mark period (days)', '90', ''],
   ['Ban length (days)', '30', ''],
   ['Players per court', '4', ''],
+  ['Periods per session', '3', ''],
   ['', '', ''],
   ['Day', 'Start', 'Finish'],
   ['Wednesday', '06:30', '08:00'],
@@ -742,8 +743,8 @@ function settingsSheet_() {
     sh.getRange(1, 1, 30, 3).setNumberFormat('@'); // keep times and lists as plain text
     sh.getRange(1, 1, DEFAULT_SETTINGS.length, 3).setValues(DEFAULT_SETTINGS);
     sh.getRange('A1:B1').setFontWeight('bold');
-    sh.getRange('A12:C12').setFontWeight('bold');
-    sh.getRange('E12').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
+    sh.getRange('A13:C13').setFontWeight('bold');
+    sh.getRange('E13').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
       .setFontStyle('italic').setFontColor('#666666');
     sh.autoResizeColumns(1, 3);
   }
@@ -770,6 +771,7 @@ function readConfig_() {
     else if (label.indexOf('black mark period') === 0) found.banPeriod = [values[i][1], i];
     else if (label.indexOf('ban length') === 0) found.banDays = [values[i][1], i];
     else if (label.indexOf('players per court') === 0) found.perCourt = [values[i][1], i];
+    else if (label.indexOf('periods per session') === 0) found.periods = [values[i][1], i];
     else if (label === 'day' && dayHeader < 0) dayHeader = i;
   }
   const where = k => 'Settings tab, row ' + (found[k][1] + 1);
@@ -811,6 +813,12 @@ function readConfig_() {
     if (!(perCourt >= 1 && perCourt <= 8 && Math.floor(perCourt) === perCourt)) throw new Error(where('perCourt') + ': "Players per court" must be a whole number, e.g. 4.');
   }
 
+  let periods = 3;
+  if (found.periods && found.periods[0].trim()) {
+    periods = Number(found.periods[0]);
+    if (!(periods >= 1 && periods <= 6 && Math.floor(periods) === periods)) throw new Error(where('periods') + ': "Periods per session" must be a whole number from 1 to 6, e.g. 3.');
+  }
+
   const ban = Object.assign({}, DEFAULT_BAN);
   [['banMarks', 'marks', 'Black marks for a ban', 0, 20], ['banPeriod', 'periodDays', 'Black mark period (days)', 1, 730],
    ['banDays', 'banDays', 'Ban length (days)', 1, 365]].forEach(x => {
@@ -838,7 +846,7 @@ function readConfig_() {
   if (!sessions.length) throw new Error('Settings tab: list at least one session day under the "Day" heading.');
   sessions.sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7)); // Monday first
 
-  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, ban: ban, perCourt: perCourt, sessions: sessions };
+  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, ban: ban, perCourt: perCourt, periods: periods, sessions: sessions };
 }
 
 function dayIndex_(text) {
