@@ -3,7 +3,7 @@
  *
  * Tabs in the spreadsheet this script is bound to (created automatically; other tabs are never touched):
  *   Settings:   book-ahead days, courts, booking lengths, start step, confirm hours, ban rule, session times
- *   Players:    ID | Name | Booker | Banned until   — everyone who books, plays on a booking, or attends
+ *   Players:    ID | Name | Booker | Ban ends   — everyone who books, plays on a booking, or attends
  *   Bookings:   Date | Court | Start | Finish | Minutes | Status | Booker | Players |
  *               Booker name | Player names | Updated | Updated by | ID
  *               ("Players" here means the people named on the booking besides the booker.)
@@ -27,9 +27,10 @@
  * Black marks are recorded by admins against any player, optionally linked to a session or booking.
  * Status is Active, Disputed (admins are asking the club to clear it) or Cleared. As a guide, Active and
  * Disputed marks are run through the club's usual rule: "Black marks for a ban" (3) within "Black mark
- * period (days)" (90) gives a "Ban length (days)" (30) ban from the date of the last of them, and the
- * marks that led to it are used up. Setting "Black marks for a ban" to 0 turns the calculation off.
- * A player's "Banned until" date on the Players tab is the club's actual ban: when it's set it replaces
+ * period (days)" (90) gives a ban that starts the day after the last of them (the club's system runs
+ * overnight) and ends "Ban length (days)" (30) days after it starts, and the marks that led to it are
+ * used up. Setting "Black marks for a ban" to 0 turns the calculation off.
+ * A player's "Ban ends" date on the Players tab is the club's actual ban: when it's set it replaces
  * the worked-out ban for that player, whether longer, shorter or already over.
  */
 
@@ -45,7 +46,7 @@ const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Status'
   'Booker name', 'Player names', 'Updated', 'Updated by', 'ID'];
 const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, status: 5, booker: 6, opponents: 7,
   bookerName: 8, opponentNames: 9, updated: 10, by: 11, id: 12 };
-const PLAYERS_HEADER = ['ID', 'Name', 'Booker', 'Banned until'];
+const PLAYERS_HEADER = ['ID', 'Name', 'Booker', 'Ban ends'];
 const MARKS_HEADER = ['ID', 'Date', 'Player', 'Reason', 'Session', 'Booking', 'Note', 'Status', 'Status note',
   'Player name', 'Updated', 'Updated by'];
 const MCOL = { id: 0, date: 1, player: 2, reason: 3, session: 4, booking: 5, note: 6, status: 7, statusNote: 8,
@@ -266,7 +267,7 @@ function updatePlayer(p) {
     if (p.booker != null) sh.getRange(player.row, 3).setValue(p.booker ? 'Yes' : '');
     if (p.bannedUntil != null) {
       const until = String(p.bannedUntil || '');
-      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error('Enter the ban end date as a date.');
+      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) throw new Error('Enter the date the ban ends.');
       sh.getRange(player.row, 4).setValue(until);
     }
   });
@@ -330,8 +331,9 @@ function setAttendance(p) {
 
 function playersSheet_() {
   const sh = sheet_(PLAYERS, PLAYERS_HEADER);
-  // Players tabs made before bans existed get the "Banned until" heading once.
-  if (!String(sh.getRange(1, 4).getDisplayValue()).trim()) sh.getRange(1, 4).setValue('Banned until').setFontWeight('bold');
+  // Players tabs made before bans existed (or with the earlier "Banned until" heading) get "Ban ends".
+  const h = String(sh.getRange(1, 4).getDisplayValue()).trim();
+  if (!h || h === 'Banned until') sh.getRange(1, 4).setValue('Ban ends').setFontWeight('bold');
   return sh;
 }
 
@@ -525,10 +527,12 @@ function findMarkRow_(sh, id) {
  * bans: [{from, to, source}], banned, counting, nextDropOff, atRisk } } for players with marks or a ban.
  *
  * Calculated bans: walking through a player's Active and Disputed marks in date order, once "marks" of
- * them fall within "periodDays" of each other, a ban of "banDays" starts on the date of the last one
- * (to = from + banDays - 1, the last banned day) and those marks are used up. "marks" = 0 turns this off.
- * If the player has a "Banned until" date, that is their ban (source 'manual') and replaces the
- * calculated ones; otherwise the calculated bans apply (source 'marks').
+ * them fall within "periodDays" of each other, a ban starts the day after the last one and ends
+ * "banDays" days later (e.g. a mark on 18 Nov gives a ban from 19 Nov ending 19 Dec), and those marks
+ * are used up. "marks" = 0 turns this off.
+ * If the player has a "Ban ends" date, that is their ban (source 'manual') and replaces the calculated
+ * ones; otherwise the calculated bans apply (source 'marks'). "banned" is the ban that hasn't ended yet,
+ * including one starting tomorrow.
  */
 function standing_(marks, players, config, today) {
   const rule = config.ban;
@@ -544,13 +548,13 @@ function standing_(marks, players, config, today) {
       pending = pending.filter(x => daysBetween_(x.date, m.date) < rule.periodDays);
       pending.push(m);
       if (rule.marks > 0 && pending.length >= rule.marks) {
-        calculated.push({ from: m.date, to: addDays_(m.date, rule.banDays - 1), source: 'marks', markIds: pending.map(x => x.id) });
+        const from = addDays_(m.date, 1);
+        calculated.push({ from: from, to: addDays_(from, rule.banDays), source: 'marks', markIds: pending.map(x => x.id) });
         pending = [];
       }
     });
     const bans = p.bannedUntil ? [{ from: '', to: p.bannedUntil, source: 'manual' }] : calculated;
-    const current = bans.filter(b => (!b.from || b.from <= today) && b.to >= today)
-      .sort((a, b) => b.to.localeCompare(a.to))[0] || null;
+    const current = bans.filter(b => b.to >= today).sort((a, b) => b.to.localeCompare(a.to))[0] || null;
     // Marks still counting towards the next ban (not used up and within the period up to today).
     const counting = pending.filter(x => daysBetween_(x.date, today) < rule.periodDays);
     const nextDropOff = counting.length ? addDays_(counting[0].date, rule.periodDays) : '';

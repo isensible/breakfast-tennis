@@ -59,11 +59,11 @@ The club's systems are the record for bookings, black marks and bans; this app i
 Black marks are given by the club, for a no-show, being a few minutes late, or sometimes a fault in the club's attendance system. Record them on the **Players** view with **Add black mark**: any player, a date, a reason (No-show, Late, System fault, Other), optionally the session or booking it relates to, and a note.
 
 - **Status:** **Active**, **Disputed** (you're asking the club managers to clear it) or **Cleared**, with a status note such as "Emailed the club manager on 21 Nov".
-- **Worked-out bans (a guide):** the app applies the club's usual rule to Active and Disputed marks: 3 within 90 days means a 30-day court and lesson ban, starting on the date of the third mark. The marks that led to a ban are used up and labelled **Led to ban**. The 3, 90 and 30 are Settings rows; set **Black marks for a ban** to `0` to turn the calculation off.
-- **The club's ban date:** open a player with **Edit** and set **Banned until** to the last day of the ban in the club's record. It replaces the worked-out ban for that player, whether it's longer, shorter or already over. Leave it empty to use the worked-out date.
+- **Worked-out bans (a guide):** the app applies the club's usual rule to Active and Disputed marks: 3 within 90 days means a 30-day court and lesson ban. It starts the day after the third mark, because the club's system runs overnight, and ends 30 days after it starts: a third mark on Wed 18 Nov gives a ban from Thu 19 Nov ending Sat 19 Dec. A mark added today shows its ban as starting tomorrow. The marks that led to a ban are used up and labelled **Led to ban**. The 3, 90 and 30 are Settings rows; set **Black marks for a ban** to `0` to turn the calculation off.
+- **The club's ban date:** open a player with **Edit** and set **Ban ends** to the end date in the club's record. It replaces the worked-out ban for that player, whether it's longer, shorter or already over. Leave it empty to use the worked-out date.
 - **Banned now** and **One mark from a ban** at the top of the Black marks panel show who is banned and until when, and whose marks to try to get cleared first, with the date their oldest counting mark drops off.
-- The mark form shows what the usual rule would make of a mark before you save, for example "By the usual rule, this means a ban for Chris Wood until Sun 20 Dec".
-- **Bookings:** anyone can be recorded as a booker or player, banned or not. The booking form just notes "Ann Lee has a ban recorded until 14 Dec" for information.
+- The mark form shows what the usual rule would make of a mark before you save, for example "By the usual rule, this means a ban for Chris Wood from Sun 22 Nov, ending Tue 22 Dec".
+- **Bookings:** anyone can be recorded as a booker or player, banned or not. The booking form just notes "Ann Lee has a ban recorded, ending 14 Dec" for information.
 
 ## Settings tab
 
@@ -77,7 +77,7 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Confirm players (hours before) | 72 | A booking with no players named is *provisional*. Players must be named this many hours before it starts, or the club cancels it. If this row is missing, 72 is used. An older sheet's "Confirm opponent (hours before)" row also works. |
 | Black marks for a ban | 3 | Active or disputed black marks within the period that lead to a worked-out ban. `0` turns the calculation off. If this row is missing, 3 is used. |
 | Black mark period (days) | 90 | How many days black marks count for. If missing, 90. |
-| Ban length (days) | 30 | How long a ban lasts, including the day it starts. If missing, 30. |
+| Ban length (days) | 30 | Days from the start of a ban (the day after the last mark) to its end date. If missing, 30. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:
@@ -128,7 +128,7 @@ An older **Settings** tab keeps working.
 
 ## Editing the sheet by hand
 
-**Players**: ID | Name | Booker | Banned until. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers. **Banned until** is the last day of the player's ban in the club's record, as `yyyy-mm-dd`; it replaces the worked-out ban.
+**Players**: ID | Name | Booker | Ban ends. Leave ID blank on rows you add; the app fills it in. Put `Yes` under Booker for bookers. **Ban ends** is the end date of the player's ban in the club's record, as `yyyy-mm-dd`; it replaces the worked-out ban. (Sheets set up earlier call this column "Banned until"; it's renamed on first load.)
 
 **Bookings**: Date | Court | Start | Finish | Minutes | Status | Booker | Players | Booker name | Player names | Updated | Updated by | ID
 
