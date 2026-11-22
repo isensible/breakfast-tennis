@@ -28,7 +28,7 @@ Bookings are individual time slots: a court can have several in one session (for
 - The form shows the finish time, notes when a booking starts before or runs past the session, and won't save if it clashes with another booking on that court.
 - Court numbers are coloured by coverage of the published session: green = covered, yellow = partly, dashed = free.
 - Each session is split into **periods** (3 by default), each a short timed match after which players change courts. Dotted lines on each court mark them. A court counts for a period only if it's booked for the whole of it.
-- Each session's header shows players (from its sign-ups) against courts booked per period, with a verdict at 4 players a court: for example "18 players · 5 / 5 / 4 courts · Period 3: 2 over · book 1 more". When every period has the same number of courts it just says "4 courts". The week line says how many sessions are short of courts.
+- Each session's header shows players (from its sign-ups) against courts booked per period, with a verdict (courts needed = players ÷ 4, rounded up): for example "18 players · 5 / 5 / 4 courts · Period 3: book 1 more". When every period has the same number of courts it just says "4 courts". The week line says how many sessions are short of courts.
 
 ### Players
 
@@ -52,7 +52,7 @@ The **Players** view lists everyone who books courts or plays on a booking. Each
 Players sign up for each session through a WhatsApp poll. Each session card has a **Sign-ups** section for working out how many courts to book:
 
 - Paste the names from the poll into the box, one per line. Numbering, bullets, WhatsApp chat prefixes ("[21/11/2026, 19:02] Ann: …") and "(you)" are tidied away; blank lines and repeated names are ignored. A single line of names separated by commas also works.
-- It shows how many signed up, the courts needed at 4 players a court (for 13 players, "3–4": three full courts with one over, or four to fit everyone), how many courts are already booked, and a short verdict: "Book 1 more", "1 over · book 1 more", "3 spaces free", "Just right" or "1 spare".
+- It shows how many signed up, the courts needed (players ÷ 4, rounded up: 13 players need 4 courts), how many courts are already booked, and a short verdict: "Book 1 more", "Just right" or "1 spare".
 - Names that aren't on the Players list are shown dashed with **+ Add**. They still count; add them if they'll be named on bookings.
 
 The screens keep text short; this README has the detail.

@@ -617,15 +617,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     return S.players.filter(function (p) { return p.name.toLowerCase() === k; })[0] || null;
   }
   // Courts needed for n players, and how that compares with the courts booked.
+  // Courts needed = players ÷ players per court, rounded up.
   function courtMaths(n, booked) {
-    var per = CFG.perCourt || 4, full = Math.floor(n / per), over = n % per, most = Math.ceil(n / per);
-    var verdict, cls = "";
-    if (!n) verdict = "";
-    else if (booked < full) { verdict = "Book " + (full - booked) + " more"; cls = "bad"; }
-    else if (booked < most) { verdict = over + " over · book 1 more"; cls = "bad"; }
-    else if (booked === most) { verdict = over ? plural(per - over, "space") + " free" : "Just right"; cls = "ok"; }
-    else { verdict = (booked - most) + " spare"; cls = "ok"; }
-    return { per: per, full: full, over: over, most: most, verdict: verdict, cls: cls };
+    var per = CFG.perCourt || 4, need = Math.ceil(n / per);
+    var verdict = "", cls = "";
+    if (n && booked < need) { verdict = "Book " + (need - booked) + " more"; cls = "bad"; }
+    else if (n && booked === need) { verdict = "Just right"; cls = "ok"; }
+    else if (n) { verdict = (booked - need) + " spare"; cls = "ok"; }
+    return { per: per, need: need, verdict: verdict, cls: cls };
   }
   // A session splits into equal periods; players change courts between them.
   function sessionPeriods(s) {
@@ -647,7 +646,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var same = pc.every(function (x) { return x === pc[0]; });
     var verdict = m.verdict;
     if (m.cls === "bad" && !same) {
-      var need = min < m.full ? m.full : m.most;
+      var need = m.need;
       var shortP = pc.map(function (x, i) { return x < need ? i + 1 : 0; }).filter(Boolean);
       verdict = (shortP.length === 1 ? "Period " : "Periods ") + shortP.join(", ") + ": " + verdict.charAt(0).toLowerCase() + verdict.slice(1);
     }
@@ -659,7 +658,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   function signResults(date, booked) {
     var names = parseNames(signText(date)), f = courtsFit(names.length, booked), m = f.m;
     return '<div class="sign-figures"><div><b>' + names.length + '</b><span>signed up</span></div>' +
-      '<div><b>' + (m.over ? m.full + '–' + m.most : m.most) + '</b><span>courts needed</span></div>' +
+      '<div><b>' + m.need + '</b><span>courts needed</span></div>' +
       '<div><b>' + f.label + '</b><span>' + (f.same ? 'booked' : 'booked per period') + '</span></div></div>' +
       (f.verdict ? '<p class="sign-verdict ' + f.cls + '">' + esc(f.verdict) + '</p>' : '') +
       (names.length ? '<div class="names">' + names.map(function (n) {
