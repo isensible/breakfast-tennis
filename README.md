@@ -27,6 +27,7 @@ Bookings are individual time slots: a court can have several in one session (for
 - **Change or delete a booking:** tap the green block.
 - The form shows the finish time, notes when a booking starts before or runs past the session, and won't save if it clashes with another booking on that court.
 - Court numbers are coloured by coverage of the published session: green = covered, yellow = partly, dashed = free.
+- Each session's header shows players (from its sign-ups) against courts booked, with a verdict at 4 players a court, such as "2 over · book 1 more" or "1 space free". The week line says how many sessions are short of courts.
 
 ### Players
 

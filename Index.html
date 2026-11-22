@@ -70,9 +70,10 @@ h1 .logo { width: 1.25em; height: 1.25em; margin-right: .3em; flex: none; }
 .session-head .count b { font-weight: 600; }
 .key { display: inline-flex; align-items: center; gap: 5px; }
 .key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.key .k-full { background: var(--court); }
-.key .k-part { background: var(--ball); }
-.key .k-free { border: 1.5px dashed var(--muted); }
+.hc { display: contents; }
+.key.verdict { font-weight: 600; }
+.key.verdict.bad { color: var(--warn); }
+.key.verdict.ok { color: var(--court); }
 .chip { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--court-soft); color: var(--court); }
 .chip.plain { background: none; border: 1px solid var(--line); color: var(--muted); }
 
@@ -561,7 +562,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     $("weeklabel").textContent = (isThisWeek ? "This week · " : "") + S.weekStart.getDate() + " " + MON[S.weekStart.getMonth()] + " – " + end.getDate() + " " + MON[end.getMonth()];
     $("thisweek").hidden = isThisWeek;
 
-    var totalFull = 0, totalCourts = 0;
+    var shortSessions = 0;
     $("sessions").innerHTML = sessionDates(S.weekStart).map(function (d) {
       var date = ymd(d), s = SESSIONS[d.getDay()];
       var daysOut = Math.round((d - today) / 86400000);
@@ -605,7 +606,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
           '<div class="win" style="left:' + pct(s.start) + ';width:' + ((s.end - s.start) / span * 100).toFixed(3) + '%"></div>' + blocks + '</div>' +
           '<button class="add" data-date="' + date + '" data-court="' + c + '" aria-label="Add a booking on court ' + c + '"' + (locked ? ' disabled' : '') + '>+</button></div>');
       }
-      totalFull += n.full; totalCourts += CFG.courts;
+      var booked = n.full + n.part;
+      if (courtMaths(parseNames(signText(date)).length, booked).cls === "bad") shortSessions++;
 
       var past = Date.now() > new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, Math.max(s.end, a1)).getTime();
       var chip = "";
@@ -616,16 +618,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
       return '<article class="session' + (past ? ' past' : '') + '">' +
         '<div class="session-head"><h2>' + short(d) + '</h2><span class="time">' + hm(s.start) + '–' + hm(s.end) + '</span>' + chip +
-        '<span class="count"><span class="key"><i class="k-full"></i><b>' + n.full + '</b> covered</span>' +
-        '<span class="key"><i class="k-part"></i><b>' + n.part + '</b> partly</span>' +
-        '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span>' +
+        '<span class="count"><span class="hc" id="headcount-' + date + '">' + headCount(date, booked) + '</span>' +
         (n.prov ? '<span class="key"><i class="k-prov"></i><b>' + n.prov + '</b> provisional</span>' : '') +
         (n.risk ? '<span class="key"><i class="k-risk"></i><b>' + n.risk + '</b> may be cancelled</span>' : '') + '</span></div>' +
         '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div>' +
-        renderSignups(date, n.full + n.part) +
+        renderSignups(date, booked) +
         (locked ? '' : renderAttendance(date)) + '</article>';
     }).join("");
-    $("tally").textContent = totalFull + " of " + totalCourts + " courts fully covered";
+    $("tally").textContent = shortSessions ? plural(shortSessions, "session") + " short of courts" : "";
   }
 
   // Same rules as the server's parseNames_: one name per line (or a comma list on one line),
@@ -679,17 +679,21 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       }).join("") + '</div>' : '') +
       '';
   }
-  function signSummary(date, booked) {
-    var names = parseNames(signText(date));
-    if (!names.length) return "None yet";
-    var m = courtMaths(names.length, booked);
-    return names.length + " · need " + (m.over ? m.full + "–" + m.most : m.most) + " · booked " + booked +
-      (m.verdict ? ' · <span class="' + m.cls + '">' + esc(m.verdict) + '</span>' : '');
+  function signSummary(date) {
+    var n = parseNames(signText(date)).length;
+    return n ? plural(n, "name") : "None yet";
+  }
+  // Session header: players signed up against courts booked (max players a court), and whether that's enough.
+  function headCount(date, booked) {
+    var players = parseNames(signText(date)).length, m = courtMaths(players, booked);
+    return (players ? '<span class="key"><b>' + players + '</b> ' + (players === 1 ? 'player' : 'players') + '</span>' : '<span class="key">No sign-ups</span>') +
+      '<span class="key"><b>' + booked + '</b> ' + (booked === 1 ? 'court' : 'courts') + '</span>' +
+      (m.verdict ? '<span class="key verdict ' + m.cls + '">' + esc(m.verdict) + '</span>' : '');
   }
   function renderSignups(date, booked) {
     var dirty = S.signDraft[date] != null && S.signDraft[date] !== (S.signups[date] || []).join("\n");
     return '<details class="att signups" data-sign="' + date + '" data-booked="' + booked + '"' + (S.openSign[date] ? ' open' : '') + '>' +
-      '<summary><span class="att-title">Sign-ups</span><span class="att-sum" id="signsum-' + date + '">' + signSummary(date, booked) + '</span></summary><div class="att-body">' +
+      '<summary><span class="att-title">Sign-ups</span><span class="att-sum" id="signsum-' + date + '">' + signSummary(date) + '</span></summary><div class="att-body">' +
       '<textarea class="sign-area" id="sign-' + date + '" data-date="' + date + '" aria-label="Names from the WhatsApp poll, one per line" placeholder="Paste names from the WhatsApp poll">' + esc(signText(date)) + '</textarea>' +
       '<div id="signres-' + date + '">' + signResults(date, booked) + '</div>' +
       '<div class="att-foot"><button type="button" class="btn primary" data-act="sign-save" data-date="' + date + '"' + (dirty ? '' : ' disabled') + ' id="signsave-' + date + '">Save sign-ups</button>' +
@@ -1199,7 +1203,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var d = e.target.dataset.date, booked = Number(e.target.closest("details").dataset.booked);
     S.signDraft[d] = e.target.value;
     $("signres-" + d).innerHTML = signResults(d, booked);
-    $("signsum-" + d).innerHTML = signSummary(d, booked);
+    $("signsum-" + d).innerHTML = signSummary(d);
+    $("headcount-" + d).innerHTML = headCount(d, booked);
     $("signsave-" + d).disabled = e.target.value === (S.signups[d] || []).join("\n");
   });
   document.addEventListener("submit", function (e) {
