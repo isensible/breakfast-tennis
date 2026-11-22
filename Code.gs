@@ -10,6 +10,7 @@
  *   Attendance: Date | Player | Status | Added | Name | Updated | Updated by
  *   Black marks: ID | Date | Player | Reason | Session | Booking | Note | Status | Status note |
  *               Player name | Updated | Updated by
+ *   Sign-ups:   Date | Names | Count | Updated | Updated by   — names pasted from the WhatsApp poll, one per line
  *
  * Bookings and attendance refer to players by ID; the name columns are only there to make
  * the sheet readable, and are refreshed whenever a player is renamed.
@@ -42,6 +43,8 @@ const PLAYERS = 'Players';
 const ATTENDANCE = 'Attendance';
 const OLD_BOOKERS = 'Bookers';
 const MARKS = 'Black marks';
+const SIGNUPS = 'Sign-ups';
+const SIGNUPS_HEADER = ['Date', 'Names', 'Count', 'Updated', 'Updated by'];
 const BOOKINGS_HEADER = ['Date', 'Court', 'Start', 'Finish', 'Minutes', 'Status', 'Booker', 'Players',
   'Booker name', 'Player names', 'Updated', 'Updated by', 'ID'];
 const COL = { date: 0, court: 1, start: 2, finish: 3, minutes: 4, status: 5, booker: 6, opponents: 7,
@@ -68,6 +71,7 @@ const DEFAULT_SETTINGS = [
   ['Black marks for a ban', '3', ''],
   ['Black mark period (days)', '90', ''],
   ['Ban length (days)', '30', ''],
+  ['Players per court', '4', ''],
   ['', '', ''],
   ['Day', 'Start', 'Finish'],
   ['Wednesday', '06:30', '08:00'],
@@ -97,6 +101,7 @@ function setup() {
   ensureSchema_();
   sheet_(ATTENDANCE, ATTENDANCE_HEADER);
   sheet_(MARKS, MARKS_HEADER);
+  sheet_(SIGNUPS, SIGNUPS_HEADER);
 }
 
 // ---------- API called from the page ----------
@@ -120,6 +125,7 @@ function getData() {
     attendance: att.filter(a => a.date >= since),
     marks: marks.filter(m => m.status !== MARK_CLEARED || m.date >= clearedSince),
     standing: standing_(marks, players, config, today),
+    signups: readSignups_().filter(x => x.date >= since),
   };
 }
 
@@ -153,6 +159,64 @@ function saveMark(m) {
     if (row) sh.getRange(row, 1, 1, values.length).setValues([values]);
     else sh.appendRow(values);
   });
+}
+
+/**
+ * Save the names pasted from a session's WhatsApp poll. p = { date, text }. Empty text removes the list.
+ */
+function saveSignups(p) {
+  return withLock_(() => {
+    const config = readConfig_();
+    const date = String(p.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date.');
+    if (!config.sessions.some(s => s.dow === dow_(date))) throw new Error('There is no Breakfast Tennis session on that day.');
+    const names = parseNames_(String(p.text || '').slice(0, 10000));
+    const sh = sheet_(SIGNUPS, SIGNUPS_HEADER);
+    const n = sh.getLastRow() - 1;
+    let row = 0;
+    if (n > 0) sh.getRange(2, 1, n, 1).getDisplayValues().forEach((r, i) => { if (!row && normDate_(r[0]) === date) row = i + 2; });
+    if (!names.length) { if (row) sh.deleteRow(row); return; }
+    const values = [date, names.join('\n'), names.length, new Date(), userEmail_()];
+    if (row) sh.getRange(row, 1, 1, values.length).setValues([values]);
+    else sh.appendRow(values);
+  });
+}
+
+function readSignups_() {
+  const sh = sheet_(SIGNUPS, SIGNUPS_HEADER);
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  const out = [];
+  sh.getRange(2, 1, n, 2).getDisplayValues().forEach(r => {
+    const date = normDate_(r[0]);
+    if (date) out.push({ date: date, names: parseNames_(r[1]) });
+  });
+  return out;
+}
+
+/**
+ * Turn pasted text into a list of names: one per line (or comma-separated if it's all on one line).
+ * Strips list markers ("1.", "-", "•", "~"), WhatsApp chat prefixes ("[21/11/2026, 19:02] Ann: …"),
+ * and "(you)"; drops blank lines and repeats (ignoring case). The page uses the same rules.
+ */
+function parseNames_(text) {
+  let lines = String(text || '').split(/\r?\n/);
+  if (lines.filter(l => l.trim()).length === 1 && lines.join('').indexOf(',') !== -1) lines = lines.join('').split(',');
+  const seen = {}, out = [];
+  lines.forEach(l => {
+    let x = l.replace(/^\s*\[[^\]]*\]\s*/, '');                       // [date, time]
+    x = x.replace(/^\s*\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*-\s*/, ''); // 21/11/2026, 19:02 -
+    const colon = x.indexOf(':');
+    if (colon > 0 && colon < 40 && /\[|\d{1,2}:\d{2}/.test(l)) x = x.slice(0, colon);    // chat line "Ann: message"
+    x = x.replace(/^\s*(?:\d{1,3}[.)]|[-•*~·–—>])\s*/, '');
+    x = x.replace(/\s*\((?:you|me)\)\s*$/i, '').replace(/[\u200e\u200f\u202a-\u202e]/g, '');
+    x = cleanName_(x);
+    if (!x || x.length > 60) return;
+    const k = x.toLowerCase();
+    if (seen[k]) return;
+    seen[k] = true; out.push(x);
+  });
+  return out;
 }
 
 function deleteMark(id) {
@@ -676,8 +740,8 @@ function settingsSheet_() {
     sh.getRange(1, 1, 30, 3).setNumberFormat('@'); // keep times and lists as plain text
     sh.getRange(1, 1, DEFAULT_SETTINGS.length, 3).setValues(DEFAULT_SETTINGS);
     sh.getRange('A1:B1').setFontWeight('bold');
-    sh.getRange('A11:C11').setFontWeight('bold');
-    sh.getRange('E11').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
+    sh.getRange('A12:C12').setFontWeight('bold');
+    sh.getRange('E12').setValue('One row per session day. Times are 24-hour hh:mm. The list ends at the first blank row.')
       .setFontStyle('italic').setFontColor('#666666');
     sh.autoResizeColumns(1, 3);
   }
@@ -703,6 +767,7 @@ function readConfig_() {
     else if (label.indexOf('black marks for a ban') === 0) found.banMarks = [values[i][1], i];
     else if (label.indexOf('black mark period') === 0) found.banPeriod = [values[i][1], i];
     else if (label.indexOf('ban length') === 0) found.banDays = [values[i][1], i];
+    else if (label.indexOf('players per court') === 0) found.perCourt = [values[i][1], i];
     else if (label === 'day' && dayHeader < 0) dayHeader = i;
   }
   const where = k => 'Settings tab, row ' + (found[k][1] + 1);
@@ -738,6 +803,12 @@ function readConfig_() {
     }
   }
 
+  let perCourt = 4;
+  if (found.perCourt && found.perCourt[0].trim()) {
+    perCourt = Number(found.perCourt[0]);
+    if (!(perCourt >= 1 && perCourt <= 8 && Math.floor(perCourt) === perCourt)) throw new Error(where('perCourt') + ': "Players per court" must be a whole number, e.g. 4.');
+  }
+
   const ban = Object.assign({}, DEFAULT_BAN);
   [['banMarks', 'marks', 'Black marks for a ban', 0, 20], ['banPeriod', 'periodDays', 'Black mark period (days)', 1, 730],
    ['banDays', 'banDays', 'Ban length (days)', 1, 365]].forEach(x => {
@@ -765,7 +836,7 @@ function readConfig_() {
   if (!sessions.length) throw new Error('Settings tab: list at least one session day under the "Day" heading.');
   sessions.sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7)); // Monday first
 
-  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, ban: ban, sessions: sessions };
+  return { bookAheadDays: bookAheadDays, courts: courts, lengths: lengths, step: step, confirmHours: confirmHours, ban: ban, perCourt: perCourt, sessions: sessions };
 }
 
 function dayIndex_(text) {
@@ -809,6 +880,7 @@ function sheet_(name, header) {
     sh.setFrozenRows(1);
     if (name === BOOKINGS) sh.getRange('A:D').setNumberFormat('@');   // dates and times as plain text
     if (name === ATTENDANCE) sh.getRange('A:A').setNumberFormat('@');
+    if (name === SIGNUPS) sh.getRange('A:A').setNumberFormat('@');
   }
   return sh;
 }

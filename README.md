@@ -12,7 +12,7 @@ Bookings are individual time slots: a court can have several in one session (for
 
 ## Setup (about 10 minutes)
 
-1. Create a new Google Sheet (or open your existing tracker). The app adds five tabs, **Settings**, **Players**, **Bookings**, **Attendance** and **Black marks**, and never touches other tabs.
+1. Create a new Google Sheet (or open your existing tracker). The app adds six tabs, **Settings**, **Players**, **Bookings**, **Attendance**, **Black marks** and **Sign-ups**, and never touches other tabs.
 2. In the sheet: **Extensions → Apps Script**.
 3. Replace the contents of `Code.gs` with this `Code.gs`.
 4. Click **+ → HTML**, name it `Index` (exactly), and paste in `Index.html`.
@@ -44,6 +44,16 @@ The **Players** view lists everyone who books courts, plays on a booking or come
 - When no players are named you can switch the status between Provisional and Confirmed yourself, for example once you've checked the club system.
 - A provisional booking still with no players named at the deadline is flagged **"Cancelled?"** (orange), because the club may have cancelled it. Nothing is blocked: check the club system, then name the players, mark it confirmed, or delete it.
 - The **Needs players** list at the top of the Sessions view shows "Cancelled?" bookings and any provisional booking whose deadline is within 2 days. Tap one to open it.
+
+### Sign-ups
+
+Players sign up for each session through a WhatsApp poll. Each session card has a **Sign-ups** section for working out how many courts to book:
+
+- Paste the names from the poll into the box, one per line. Numbering, bullets, WhatsApp chat prefixes ("[21/11/2026, 19:02] Ann: …") and "(you)" are tidied away; blank lines and repeated names are ignored. A single line of names separated by commas also works.
+- It shows how many signed up, the courts needed at 4 players a court (for 13 players, "3–4": three full courts with one over, or four to fit everyone), and how many courts are already booked for the session, with a line saying whether that's short or covered.
+- Names that aren't on the Players list are shown dashed with **+ Add**. They still count; add them if they'll be named on bookings or attendance.
+- **Save sign-ups** keeps the list with the session so the other admins see the same count. Saving an empty box removes it.
+- Sign-ups work for sessions whose bookings haven't opened yet.
 
 ### Attendance
 
@@ -78,6 +88,7 @@ Change these in the sheet; the app picks them up the next time anyone loads or r
 | Black marks for a ban | 3 | Active or disputed black marks within the period that lead to a worked-out ban. `0` turns the calculation off. If this row is missing, 3 is used. |
 | Black mark period (days) | 90 | How many days black marks count for. If missing, 90. |
 | Ban length (days) | 30 | Days from the start of a ban (the day after the last mark) to its end date. If missing, 30. |
+| Players per court | 4 | Used by Sign-ups to work out courts needed. If missing, 4. |
 | Start time step (minutes) | 30 | Start times offered in the form (30 gives 06:00, 06:30, 07:00 …). Use 5, 10, 15, 20, 30 or 60. |
 
 Below that, one row per session day:
@@ -139,6 +150,8 @@ An older **Settings** tab keeps working.
 - Leave **ID** blank on rows you add; the app fills it in.
 
 **Attendance**: Date | Player | Status | Added | Name | Updated | Updated by. Status is `Attended` or `No-show`; Added is `Yes` for players who weren't on a booking.
+
+**Sign-ups**: Date | Names | Count | Updated | Updated by. Names are one per line; Count is filled in by the app.
 
 **Black marks**: ID | Date | Player | Reason | Session | Booking | Note | Status | Status note | Player name | Updated | Updated by. Player is a player ID; on a row you add by hand you can leave it blank and type the name under **Player name**. Reason is `No-show`, `Late`, `System fault` or `Other`; Status is `Active`, `Disputed` or `Cleared`.
 

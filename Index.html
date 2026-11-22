@@ -243,6 +243,22 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 .pill.disputed { background: var(--court-soft); color: var(--court); }
 .pill.cleared { border: 1px solid var(--line); color: var(--muted); }
 .pill.spent { border: 1px solid var(--warn); color: var(--warn); }
+/* Sign-ups pasted from the WhatsApp poll */
+.att.signups summary .att-sum .bad { color: var(--warn); font-weight: 600; }
+.att.signups summary .att-sum .ok { color: var(--court); font-weight: 600; }
+.sign-area { width: 100%; min-height: 7.5em; resize: vertical; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); font: inherit; line-height: 1.4; }
+.sign-figures { display: flex; flex-wrap: wrap; gap: 8px 22px; font-variant-numeric: tabular-nums; }
+.sign-figures div { display: grid; }
+.sign-figures b { font-family: var(--display); font-size: 1.6rem; line-height: 1; }
+.sign-figures span { font-size: .8rem; color: var(--muted); }
+.sign-verdict { margin: 0; font-weight: 600; }
+.sign-verdict.bad { color: var(--warn); }
+.sign-verdict.ok { color: var(--court); }
+.names { display: flex; flex-wrap: wrap; gap: 5px; }
+.names span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--court-soft); font-size: .86rem; }
+.names span.unknown { background: none; border: 1px dashed var(--muted); }
+.names button { border: 0; background: none; padding: 0 0 0 2px; color: var(--court); font-weight: 700; font-size: .86rem; }
 .banwarn { color: var(--muted); font-size: .9rem; margin: 0; }
 .preview { margin: 0; font-weight: 600; }
 .preview.bad { color: var(--warn); }
@@ -318,6 +334,9 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     marks: [],         // black marks: {id, date, playerId, reason, sessionDate, bookingId, note, status, statusNote}
     standing: {},      // per player: {bans: [{from, to, source, markIds}], banned, counting, nextDropOff, atRisk}
     mark: null,        // black mark being added or edited
+    signups: {},       // date -> names pasted from the WhatsApp poll (saved)
+    signDraft: {},     // date -> text being edited, not saved yet
+    openSign: {},
     showCleared: false,
     weekStart: mondayOf(new Date()),
     tab: "sessions", edit: null, openAtt: {}, query: "", renaming: null, confirmRemove: null
@@ -482,6 +501,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     S.attendance = data.attendance || [];
     S.marks = data.marks || [];
     S.standing = data.standing || {};
+    S.signups = {}; (data.signups || []).forEach(function (x) { S.signups[x.date] = x.names; });
     if (!S.loaded) { S.loaded = true; S.weekStart = mondayOf(parse(data.today)); }
     setStatus("");
     render();
@@ -606,9 +626,80 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         (n.risk ? '<span class="key"><i class="k-risk"></i><b>' + n.risk + '</b> may be cancelled</span>' : '') + '</span></div>' +
         (locked ? '<div class="lockednote">Bookings for this session open on ' + short(addDays(d, -CFG.bookAheadDays)) + '.</div>' : '') +
         '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div>' +
+        renderSignups(date, n.full + n.part) +
         (locked ? '' : renderAttendance(date)) + '</article>';
     }).join("");
     $("tally").textContent = totalFull + " of " + totalCourts + " courts fully covered";
+  }
+
+  // Same rules as the server's parseNames_: one name per line (or a comma list on one line),
+  // list markers and WhatsApp chat prefixes stripped, blanks and repeats dropped.
+  function parseNames(text) {
+    var lines = String(text || "").split(/\r?\n/);
+    if (lines.filter(function (l) { return l.trim(); }).length === 1 && lines.join("").indexOf(",") !== -1) lines = lines.join("").split(",");
+    var seen = {}, out = [];
+    lines.forEach(function (l) {
+      var x = l.replace(/^\s*\[[^\]]*\]\s*/, "");
+      x = x.replace(/^\s*\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*-\s*/, "");
+      var colon = x.indexOf(":");
+      if (colon > 0 && colon < 40 && /\[|\d{1,2}:\d{2}/.test(l)) x = x.slice(0, colon);
+      x = x.replace(/^\s*(?:\d{1,3}[.)]|[-•*~·–—>])\s*/, "");
+      x = x.replace(/\s*\((?:you|me)\)\s*$/i, "").replace(/[‎‏‪-‮]/g, "");
+      x = x.trim().replace(/\s+/g, " ");
+      if (!x || x.length > 60) return;
+      var k = x.toLowerCase();
+      if (seen[k]) return;
+      seen[k] = true; out.push(x);
+    });
+    return out;
+  }
+  function playerByName(name) {
+    var k = name.toLowerCase();
+    return S.players.filter(function (p) { return p.name.toLowerCase() === k; })[0] || null;
+  }
+  // Courts needed for n players, and how that compares with the courts booked.
+  function courtMaths(n, booked) {
+    var per = CFG.perCourt || 4, full = Math.floor(n / per), over = n % per, most = Math.ceil(n / per);
+    var verdict, cls = "";
+    if (!n) verdict = "";
+    else if (booked < full) { verdict = "Book " + plural(full - booked, "more court") + (over ? " (or " + (most - booked) + " to fit everyone)" : "") + "."; cls = "bad"; }
+    else if (booked < most) { verdict = full + " full " + (full === 1 ? "court" : "courts") + " with " + plural(over, "player") + " over. Book 1 more court to fit everyone."; cls = "bad"; }
+    else if (booked === most) { verdict = over ? "Enough courts for everyone, with " + plural(per - over, "place") + " free." : "Exactly the courts needed."; cls = "ok"; }
+    else { verdict = plural(booked - most, "court") + " more than needed."; cls = "ok"; }
+    return { per: per, full: full, over: over, most: most, verdict: verdict, cls: cls };
+  }
+  function signText(date) {
+    return S.signDraft[date] != null ? S.signDraft[date] : (S.signups[date] || []).join("\n");
+  }
+  function signResults(date, booked) {
+    var names = parseNames(signText(date)), m = courtMaths(names.length, booked);
+    var unknown = names.filter(function (n) { return !playerByName(n); }).length;
+    return '<div class="sign-figures"><div><b>' + names.length + '</b><span>signed up</span></div>' +
+      '<div><b>' + (m.over ? m.full + '–' + m.most : m.most) + '</b><span>courts needed (' + m.per + ' a court)</span></div>' +
+      '<div><b>' + booked + '</b><span>booked</span></div></div>' +
+      (m.verdict ? '<p class="sign-verdict ' + m.cls + '">' + esc(m.verdict) + '</p>' : '') +
+      (names.length ? '<div class="names">' + names.map(function (n) {
+        return playerByName(n) ? '<span>' + esc(n) + '</span>'
+          : '<span class="unknown" title="Not on the Players list">' + esc(n) + '<button type="button" data-act="sign-addplayer" data-name="' + esc(n) + '" aria-label="Add ' + esc(n) + ' to the Players list">+ Add</button></span>';
+      }).join("") + '</div>' : '') +
+      (unknown ? '<p class="hint">Dashed names aren’t on the Players list. That doesn’t change the count; add them if they’ll be named on bookings or attendance.</p>' : '');
+  }
+  function signSummary(date, booked) {
+    var names = parseNames(signText(date));
+    if (!names.length) return "Paste names from the WhatsApp poll";
+    var m = courtMaths(names.length, booked);
+    return names.length + " signed up · " + (m.over ? m.full + "–" + m.most : m.most) + " courts needed · " + booked + " booked" +
+      (m.verdict ? ' · <span class="' + m.cls + '">' + (m.cls === "bad" ? "short" : "covered") + '</span>' : '');
+  }
+  function renderSignups(date, booked) {
+    var dirty = S.signDraft[date] != null && S.signDraft[date] !== (S.signups[date] || []).join("\n");
+    return '<details class="att signups" data-sign="' + date + '" data-booked="' + booked + '"' + (S.openSign[date] ? ' open' : '') + '>' +
+      '<summary><span class="att-title">Sign-ups</span><span class="att-sum" id="signsum-' + date + '">' + signSummary(date, booked) + '</span></summary><div class="att-body">' +
+      '<textarea class="sign-area" id="sign-' + date + '" data-date="' + date + '" aria-label="Names from the WhatsApp poll, one per line" placeholder="Paste the names from the WhatsApp poll, one per line">' + esc(signText(date)) + '</textarea>' +
+      '<div id="signres-' + date + '">' + signResults(date, booked) + '</div>' +
+      '<div class="att-foot"><button type="button" class="btn primary" data-act="sign-save" data-date="' + date + '"' + (dirty ? '' : ' disabled') + ' id="signsave-' + date + '">Save sign-ups</button>' +
+      (dirty ? '<button type="button" class="btn" data-act="sign-revert" data-date="' + date + '">Undo changes</button>' : '') + '</div>' +
+      '</div></details>';
   }
 
   function renderAttendance(date) {
@@ -794,7 +885,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<div class="field"><span class="flabel">Reason</span><div class="picker" role="radiogroup" aria-label="Reason">' + reasons + '</div></div>' +
       '<div class="field"><label class="flabel" for="mk-session">Session (optional)</label><select id="mk-session"><option value="">Not linked to a session</option>' +
       choices.map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.key === mk.sessionKey ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join("") + '</select></div>' +
-      '<div class="field"><label class="flabel" for="mk-note">Note</label><input type="text" id="mk-note" maxlength="200" value="' + esc(mk.note) + '" placeholder="e.g. 10 minutes late, court given away"></div>' +
+      '<div class="field"><label class="flabel" for="mk-note">Note</label><input type="text" id="mk-note" maxlength="200" value="' + esc(mk.note) + '" placeholder="e.g. 10 minutes late"></div>' +
       '<div class="field"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' + statuses + '</div>' +
       '<input type="text" id="mk-snote" maxlength="200" value="' + esc(mk.statusNote) + '" placeholder="e.g. Emailed the club manager on 21 Nov" aria-label="Status note"></div>' +
       '<p id="mkpreview" class="preview" aria-live="polite"></p>' +
@@ -1037,6 +1128,20 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     if (a === "mark-delete-no") { S.mark.confirmDelete = false; renderSheet(); return; }
     if (a === "mark-delete-yes") { var mid = S.mark.id; S.mark = null; renderSheet(); write("deleteMark", mid, "Black mark deleted"); return; }
     if (a === "toggle-cleared") { S.showCleared = !S.showCleared; renderMarks(); return; }
+    if (a === "sign-save") {
+      var text = parseNames(signText(date)).join("\n");
+      S.signups[date] = parseNames(text); delete S.signDraft[date];
+      renderSessions();
+      write("saveSignups", { date: date, text: text }, S.signups[date].length ? plural(S.signups[date].length, "sign-up") + " saved" : "Sign-ups cleared");
+      return;
+    }
+    if (a === "sign-revert") { delete S.signDraft[date]; renderSessions(); return; }
+    if (a === "sign-addplayer") {
+      var nm = act.dataset.name;
+      if (playerByName(nm)) return;
+      write("addPlayer", { name: nm, booker: false }, nm + " added to the Players list");
+      return;
+    }
     if (a === "delete") deleteBooking();
     else if (a === "go-players") { S.edit = null; renderSheet(); S.tab = "players"; render(); }
     else if (a === "att-set") {
@@ -1095,8 +1200,18 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   });
   document.addEventListener("toggle", function (e) {
     var el = e.target;
-    if (el.classList && el.classList.contains("att")) S.openAtt[el.dataset.att] = el.open;
+    if (el.classList && el.classList.contains("signups")) S.openSign[el.dataset.sign] = el.open;
+    else if (el.classList && el.classList.contains("att")) S.openAtt[el.dataset.att] = el.open;
   }, true);
+  document.addEventListener("input", function (e) {
+    if (!(e.target.classList && e.target.classList.contains("sign-area"))) return;
+    // Recount as you type, without redrawing the text box.
+    var d = e.target.dataset.date, booked = Number(e.target.closest("details").dataset.booked);
+    S.signDraft[d] = e.target.value;
+    $("signres-" + d).innerHTML = signResults(d, booked);
+    $("signsum-" + d).innerHTML = signSummary(d, booked);
+    $("signsave-" + d).disabled = e.target.value === (S.signups[d] || []).join("\n");
+  });
   document.addEventListener("submit", function (e) {
     e.preventDefault();
     if (e.target.id === "bookform") saveBooking();
@@ -1128,7 +1243,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   render();
   load();
   // Pick up other admins' changes every 30 seconds while the page is open (not while typing a rename).
-  setInterval(function () { if (!document.hidden && !S.busy && !S.edit && !S.mark && !S.renaming) load(); }, 30000);
+  function typingSignups() { var a = document.activeElement; return !!(a && a.classList && a.classList.contains("sign-area")); }
+  setInterval(function () { if (!document.hidden && !S.busy && !S.edit && !S.mark && !S.renaming && !typingSignups()) load(); }, 30000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !S.busy && !S.renaming) load(); });
 })();
 </script>
