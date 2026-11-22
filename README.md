@@ -50,8 +50,10 @@ The **Players** view lists everyone who books courts, plays on a booking or come
 Players sign up for each session through a WhatsApp poll. Each session card has a **Sign-ups** section for working out how many courts to book:
 
 - Paste the names from the poll into the box, one per line. Numbering, bullets, WhatsApp chat prefixes ("[21/11/2026, 19:02] Ann: …") and "(you)" are tidied away; blank lines and repeated names are ignored. A single line of names separated by commas also works.
-- It shows how many signed up, the courts needed at 4 players a court (for 13 players, "3–4": three full courts with one over, or four to fit everyone), and how many courts are already booked for the session, with a line saying whether that's short or covered.
+- It shows how many signed up, the courts needed at 4 players a court (for 13 players, "3–4": three full courts with one over, or four to fit everyone), how many courts are already booked, and a short verdict: "Book 1 more", "1 over · book 1 more", "3 spaces free", "Just right" or "1 spare".
 - Names that aren't on the Players list are shown dashed with **+ Add**. They still count; add them if they'll be named on bookings or attendance.
+
+The screens keep text short; this README has the detail.
 - **Save sign-ups** keeps the list with the session so the other admins see the same count. Saving an empty box removes it.
 - Sign-ups work for sessions whose bookings haven't opened yet.
 

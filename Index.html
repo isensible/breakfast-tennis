@@ -302,7 +302,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     <div class="panel">
       <div>
         <h2>Players</h2>
-        <p class="sub">Everyone who books courts, plays on a booking or comes to sessions. Tick Booker for the people who book courts.</p>
       </div>
       <form class="addrow" id="addform">
         <input id="newname" placeholder="New player’s name" autocomplete="off" maxlength="40" aria-label="New player’s name">
@@ -540,17 +539,14 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       return st === "risk" || (st === "prov" && deadline(b) <= soon);
     }).sort(function (a, b) { return deadline(a) - deadline(b); });
     if (!items.length) { el.hidden = true; el.innerHTML = ""; return; }
-    var risky = items.filter(function (b) { return bstatus(b) === "risk"; }).length;
     el.innerHTML = '<h2>Needs players</h2>' +
-      '<p class="hint">The club cancels provisional bookings that have no players named ' + CFG.confirmHours + ' hours before they start.' +
-      (risky ? ' Bookings marked "Cancelled?" are past that point: check the club system, then name the players, mark it confirmed, or delete it.' : '') + '</p>' +
       '<ul>' + items.map(function (b) {
         var st = bstatus(b), dl = deadline(b);
         var cls = st === "risk" ? "lapsed" : dl - nowMs() < 12 * HOUR ? "soon" : "";
         return '<li class="' + cls + '"><button type="button" data-open="' + esc(b.id) + '">' +
           (st === "risk" ? '<span class="tag warn">Cancelled?</span>' : '<span class="tag">Prov</span>') +
           '<span class="what">Court ' + b.court + ' · ' + short(parse(b.date)) + ' ' + b.start + ' · ' + esc(pname(b.bookerId)) + '</span>' +
-          '<span class="due">' + (st === "risk" ? "Deadline was " + when(dl) : "Name by " + when(dl) + " (" + untilText(dl) + ")") + '</span>' +
+          '<span class="due">' + (st === "risk" ? "Deadline passed" : "Name by " + when(dl)) + '</span>' +
           '</button></li>';
       }).join("") + '</ul>';
     el.hidden = false;
@@ -578,7 +574,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       var span = a1 - a0;
       function pct(m) { return ((m - a0) / span * 100).toFixed(3) + "%"; }
 
-      var tickStep = span > 210 ? 60 : 30, ticks = [];
+      // Hourly labels when the axis is long or the screen is narrow, so times don't run together.
+      var tickStep = span > 210 || (span > 120 && window.innerWidth < 560) ? 60 : 30, ticks = [];
       for (var t = Math.ceil(a0 / tickStep) * tickStep; t <= a1; t += tickStep) {
         var cls = t === a0 ? "first" : t === a1 ? "last" : "";
         ticks.push('<span class="' + cls + '" style="left:' + pct(t) + '">' + hm(t) + '</span>');
@@ -624,7 +621,6 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         '<span class="key"><i class="k-free"></i><b>' + n.free + '</b> free</span>' +
         (n.prov ? '<span class="key"><i class="k-prov"></i><b>' + n.prov + '</b> provisional</span>' : '') +
         (n.risk ? '<span class="key"><i class="k-risk"></i><b>' + n.risk + '</b> may be cancelled</span>' : '') + '</span></div>' +
-        (locked ? '<div class="lockednote">Bookings for this session open on ' + short(addDays(d, -CFG.bookAheadDays)) + '.</div>' : '') +
         '<div class="board"><div class="row"><span></span><div class="axis">' + ticks.join("") + '</div><span></span></div>' + rows.join("") + '</div>' +
         renderSignups(date, n.full + n.part) +
         (locked ? '' : renderAttendance(date)) + '</article>';
@@ -662,10 +658,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var per = CFG.perCourt || 4, full = Math.floor(n / per), over = n % per, most = Math.ceil(n / per);
     var verdict, cls = "";
     if (!n) verdict = "";
-    else if (booked < full) { verdict = "Book " + plural(full - booked, "more court") + (over ? " (or " + (most - booked) + " to fit everyone)" : "") + "."; cls = "bad"; }
-    else if (booked < most) { verdict = full + " full " + (full === 1 ? "court" : "courts") + " with " + plural(over, "player") + " over. Book 1 more court to fit everyone."; cls = "bad"; }
-    else if (booked === most) { verdict = over ? "Enough courts for everyone, with " + plural(per - over, "place") + " free." : "Exactly the courts needed."; cls = "ok"; }
-    else { verdict = plural(booked - most, "court") + " more than needed."; cls = "ok"; }
+    else if (booked < full) { verdict = "Book " + (full - booked) + " more"; cls = "bad"; }
+    else if (booked < most) { verdict = over + " over · book 1 more"; cls = "bad"; }
+    else if (booked === most) { verdict = over ? plural(per - over, "space") + " free" : "Just right"; cls = "ok"; }
+    else { verdict = (booked - most) + " spare"; cls = "ok"; }
     return { per: per, full: full, over: over, most: most, verdict: verdict, cls: cls };
   }
   function signText(date) {
@@ -673,29 +669,28 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
   }
   function signResults(date, booked) {
     var names = parseNames(signText(date)), m = courtMaths(names.length, booked);
-    var unknown = names.filter(function (n) { return !playerByName(n); }).length;
     return '<div class="sign-figures"><div><b>' + names.length + '</b><span>signed up</span></div>' +
-      '<div><b>' + (m.over ? m.full + '–' + m.most : m.most) + '</b><span>courts needed (' + m.per + ' a court)</span></div>' +
+      '<div><b>' + (m.over ? m.full + '–' + m.most : m.most) + '</b><span>courts needed</span></div>' +
       '<div><b>' + booked + '</b><span>booked</span></div></div>' +
       (m.verdict ? '<p class="sign-verdict ' + m.cls + '">' + esc(m.verdict) + '</p>' : '') +
       (names.length ? '<div class="names">' + names.map(function (n) {
         return playerByName(n) ? '<span>' + esc(n) + '</span>'
           : '<span class="unknown" title="Not on the Players list">' + esc(n) + '<button type="button" data-act="sign-addplayer" data-name="' + esc(n) + '" aria-label="Add ' + esc(n) + ' to the Players list">+ Add</button></span>';
       }).join("") + '</div>' : '') +
-      (unknown ? '<p class="hint">Dashed names aren’t on the Players list. That doesn’t change the count; add them if they’ll be named on bookings or attendance.</p>' : '');
+      '';
   }
   function signSummary(date, booked) {
     var names = parseNames(signText(date));
-    if (!names.length) return "Paste names from the WhatsApp poll";
+    if (!names.length) return "None yet";
     var m = courtMaths(names.length, booked);
-    return names.length + " signed up · " + (m.over ? m.full + "–" + m.most : m.most) + " courts needed · " + booked + " booked" +
-      (m.verdict ? ' · <span class="' + m.cls + '">' + (m.cls === "bad" ? "short" : "covered") + '</span>' : '');
+    return names.length + " · need " + (m.over ? m.full + "–" + m.most : m.most) + " · booked " + booked +
+      (m.verdict ? ' · <span class="' + m.cls + '">' + esc(m.verdict) + '</span>' : '');
   }
   function renderSignups(date, booked) {
     var dirty = S.signDraft[date] != null && S.signDraft[date] !== (S.signups[date] || []).join("\n");
     return '<details class="att signups" data-sign="' + date + '" data-booked="' + booked + '"' + (S.openSign[date] ? ' open' : '') + '>' +
       '<summary><span class="att-title">Sign-ups</span><span class="att-sum" id="signsum-' + date + '">' + signSummary(date, booked) + '</span></summary><div class="att-body">' +
-      '<textarea class="sign-area" id="sign-' + date + '" data-date="' + date + '" aria-label="Names from the WhatsApp poll, one per line" placeholder="Paste the names from the WhatsApp poll, one per line">' + esc(signText(date)) + '</textarea>' +
+      '<textarea class="sign-area" id="sign-' + date + '" data-date="' + date + '" aria-label="Names from the WhatsApp poll, one per line" placeholder="Paste names from the WhatsApp poll">' + esc(signText(date)) + '</textarea>' +
       '<div id="signres-' + date + '">' + signResults(date, booked) + '</div>' +
       '<div class="att-foot"><button type="button" class="btn primary" data-act="sign-save" data-date="' + date + '"' + (dirty ? '' : ' disabled') + ' id="signsave-' + date + '">Save sign-ups</button>' +
       (dirty ? '<button type="button" class="btn" data-act="sign-revert" data-date="' + date + '">Undo changes</button>' : '') + '</div>' +
@@ -730,7 +725,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var others = S.players.filter(function (p) { return !listed[p.id]; });
     return '<details class="att" data-att="' + date + '"' + (S.openAtt[date] ? ' open' : '') + '>' +
       '<summary><span class="att-title">Attendance</span><span class="att-sum">' + sum + '</span></summary><div class="att-body">' +
-      (list.length ? '<ul class="att-list">' + rows + '</ul>' : '<p class="empty">No one is named on a booking for this session yet.</p>') +
+      (list.length ? '<ul class="att-list">' + rows + '</ul>' : '<p class="empty">No one booked yet.</p>') +
       '<div class="att-foot"><select id="addatt-' + date + '" aria-label="Add a player who came to this session">' +
       '<option value="">Add a player who came…</option>' + others.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("") + '</select>' +
       '<button type="button" class="btn" data-act="att-add" data-date="' + date + '">Add</button>' +
@@ -760,20 +755,17 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var shown = S.marks.filter(function (m) { return S.showCleared || m.status !== "Cleared"; });
     var clearedCount = S.marks.length - S.marks.filter(function (m) { return m.status !== "Cleared"; }).length;
 
-    var ruleText = r.marks > 0
-      ? 'As a guide, the app applies the club’s usual rule: ' + r.marks + ' black marks within ' + r.periodDays + ' days means a ' + r.banDays + '-day court and lesson ban, starting the day after the last mark (so free to book again ' + r.banDays + ' days after it starts), and the marks that led to it are used up. Disputed marks count until the club clears them. '
-      : 'Working out bans from marks is turned off in Settings. ';
-    var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + ruleText +
-      'The club’s own record comes first: set a player’s “Free to book from” date with Edit to match it. Black marks and bans don’t change any bookings.</p></div>' +
+    var ruleText = r.marks > 0 ? r.marks + ' in ' + r.periodDays + ' days = ' + r.banDays + '-day ban' : 'Ban calculation off';
+    var html = '<div class="marks-head"><div><h2>Black marks</h2><p class="sub">' + ruleText + '</p></div>' +
       '<button type="button" class="btn primary" data-act="mark-new">Add black mark</button></div>';
     if (bannedNow.length || atRisk.length) {
       html += '<div class="standings">';
-      if (bannedNow.length) html += '<div class="standing banned"><h3>Banned now</h3><ul>' + bannedNow.map(function (x) {
+      if (bannedNow.length) html += '<div class="standing banned"><h3>Banned</h3><ul>' + bannedNow.map(function (x) {
         var b = x.st.banned, starts = b.from && b.from > (S.today || '');
-        return '<li><b>' + esc(x.p.name) + '</b><span>' + (starts ? 'from ' + fmt(b.from) + ' ' : '') + 'to ' + fmt(b.to) + ' · free from ' + fmt(b.freeFrom) + (b.source === 'manual' ? ' · club’s date' : ' · worked out from marks') + '</span></li>';
+        return '<li><b>' + esc(x.p.name) + '</b><span>' + (starts ? 'from ' + fmt(b.from) + ' · ' : '') + 'free ' + fmt(b.freeFrom) + (b.source === 'manual' ? ' (club)' : '') + '</span></li>';
       }).join("") + '</ul></div>';
-      if (atRisk.length) html += '<div class="standing risk"><h3>One mark from a ban</h3><ul>' + atRisk.map(function (x) {
-        return '<li><b>' + esc(x.p.name) + '</b><span>' + x.st.counting.length + ' of ' + r.marks + (x.st.nextDropOff ? ' · first drops off ' + fmt(x.st.nextDropOff) : '') + '</span></li>';
+      if (atRisk.length) html += '<div class="standing risk"><h3>One from a ban</h3><ul>' + atRisk.map(function (x) {
+        return '<li><b>' + esc(x.p.name) + '</b><span>' + x.st.counting.length + ' of ' + r.marks + (x.st.nextDropOff ? ' until ' + fmt(x.st.nextDropOff) : '') + '</span></li>';
       }).join("") + '</ul></div>';
       html += '</div>';
     }
@@ -788,8 +780,8 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
         '<span class="top">' + pill + '<b>' + esc(pname(m.playerId)) + '</b><span>' + fmt(m.date) + ' · ' + esc(m.reason) + linked + '</span></span>' +
         (m.note ? '<span class="meta">' + esc(m.note) + '</span>' : '') +
         (m.statusNote ? '<span class="snote">' + esc(m.statusNote) + '</span>' : '') + '</button></li>';
-    }).join("") + '</ul>' : '<p class="empty">' + (S.loaded ? (S.marks.length ? 'No active black marks.' : 'No black marks recorded.') : 'Loading…') + '</p>';
-    if (clearedCount) html += '<div><button type="button" class="linklike" data-act="toggle-cleared">' + (S.showCleared ? 'Hide cleared marks' : 'Show ' + plural(clearedCount, 'cleared mark')) + '</button></div>';
+    }).join("") + '</ul>' : '<p class="empty">' + (S.loaded ? 'None' : 'Loading…') + '</p>';
+    if (clearedCount) html += '<div><button type="button" class="linklike" data-act="toggle-cleared">' + (S.showCleared ? 'Hide cleared' : 'Show cleared (' + clearedCount + ')') + '</button></div>';
     $("marks").innerHTML = html;
   }
 
@@ -805,18 +797,18 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
     var q = S.query.trim().toLowerCase();
     var list = S.players.filter(function (p) { return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.id.toLowerCase() === q; });
-    if (!S.players.length) { $("people").innerHTML = '<li><p class="empty">' + (S.loaded ? 'No players yet. Add the first name above.' : 'Loading…') + '</p></li>'; return; }
-    if (!list.length) { $("people").innerHTML = '<li><p class="empty">No players match “' + esc(S.query) + '”.</p></li>'; return; }
+    if (!S.players.length) { $("people").innerHTML = '<li><p class="empty">' + (S.loaded ? 'No players yet' : 'Loading…') + '</p></li>'; return; }
+    if (!list.length) { $("people").innerHTML = '<li><p class="empty">No match</p></li>'; return; }
     $("people").innerHTML = list.map(function (p) {
       var id = esc(p.id);
       if (S.renaming === p.id) {
         return '<li><input type="text" id="rename-' + id + '" value="' + esc(p.name) + '" maxlength="40" aria-label="Name">' +
-          '<label class="editlabel">Free to book from <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
+          '<label class="editlabel" title="If banned: the date the club says they can book again. Overrides the worked-out ban.">Free to book from <input type="date" id="banuntil-' + id + '" value="' + esc(p.bannedUntil || '') + '"></label>' +
           '<button class="btn primary" data-act="rename-save" data-id="' + id + '">Save</button><button class="btn" data-act="rename-cancel">Cancel</button>' +
-          '<p class="hint" style="flex-basis:100%">If the player is banned, set the date the club says they can book again. It replaces the ban worked out from marks, even if it’s shorter. Leave it empty to use the worked-out ban.</p></li>';
+          '</li>';
       }
       var st = S.standing[p.id], up = upcoming[p.id] || 0, tags = '';
-      if (st && st.banned) tags += '<span class="tag warn">' + (st.banned.from && st.banned.from > (S.today || '') ? 'Ban starts ' + fmt(st.banned.from) : 'Banned · free from ' + fmt(st.banned.freeFrom)) + '</span>';
+      if (st && st.banned) tags += '<span class="tag warn">' + (st.banned.from && st.banned.from > (S.today || '') ? 'Ban from ' + fmt(st.banned.from) : 'Banned · free ' + fmt(st.banned.freeFrom)) + '</span>';
       else if (st && st.counting.length) tags += '<span class="tag' + (st.atRisk ? ' warn' : '') + '">' + st.counting.length + ' of ' + r.marks + ' marks</span>';
       var right = S.confirmRemove === p.id
         ? '<span class="confirm">Remove ' + esc(p.name) + '?</span><button class="btn danger" data-act="remove-yes" data-id="' + id + '">Remove</button><button class="btn" data-act="remove-no">Keep</button>'
@@ -824,7 +816,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
           '<button class="btn" data-act="rename" data-id="' + id + '">Edit</button>' +
           '<button class="btn danger" data-act="remove" data-id="' + id + '">Remove</button>';
       return '<li><span class="who"><span class="name">' + esc(p.name) + '</span><span class="pid">' + id + '</span>' + (tags ? '<span class="tags">' + tags + '</span>' : '') + '</span>' +
-        '<span class="stat">' + plural(up, "upcoming booking") + '</span>' + right + '</li>';
+        '<span class="stat">' + (up ? up + " upcoming" : "") + '</span>' + right + '</li>';
     }).join("");
   }
 
@@ -859,11 +851,10 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var after = bansFrom(mk.playerId, others.concat([{ id: mk.id || 'new', playerId: mk.playerId, date: mk.date, status: mk.status }]));
     var text = "", bad = false;
     var manual = S.byId[mk.playerId] && S.byId[mk.playerId].bannedUntil;
-    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "By the usual rule, this means a ban for " + name + " from " + fmt(after.banned.from) + " to " + fmt(after.banned.to) + ", free to book again " + fmt(after.banned.freeFrom) + " (" + r.marks + " marks within " + r.periodDays + " days)."; bad = true; }
-    else if (!after.banned && before.banned) text = "By the usual rule, this lifts " + name + "’s ban.";
-    else if (!after.banned && after.counting === r.marks - 1 && r.marks > 1) { text = name + " will be on " + after.counting + " of " + r.marks + " marks: one more means a ban."; bad = true; }
-    else if (!after.banned && mk.status !== "Cleared") text = name + " will be on " + after.counting + " of " + r.marks + " marks.";
-    if (text && manual) text += " " + name + "’s ban is set from the club’s record (free from " + fmt(manual) + "), so that’s what shows.";
+    if (after.banned && (!before.banned || after.banned.to !== before.banned.to)) { text = "Ban: " + fmt(after.banned.from) + " – " + fmt(after.banned.to); bad = true; }
+    else if (!after.banned && before.banned) text = "Lifts the ban";
+    else if (!after.banned && mk.status !== "Cleared" && r.marks > 0) { text = after.counting + " of " + r.marks + " marks"; bad = after.counting === r.marks - 1; }
+    if (text && manual) text += " (club date set: free " + fmt(manual) + ")";
     el.textContent = text; el.className = "preview" + (bad ? " bad" : "");
   }
   function renderMarkSheet() {
@@ -874,7 +865,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     var reasons = ["No-show", "Late", "System fault", "Other"].map(function (x) {
       return '<label><input type="radio" name="mk-reason" value="' + x + '"' + (mk.reason === x ? ' checked' : '') + '><span>' + x + '</span></label>';
     }).join("");
-    var statuses = [["Active", "Active"], ["Disputed", "Disputed with the club"], ["Cleared", "Cleared"]].map(function (x) {
+    var statuses = [["Active", "Active"], ["Disputed", "Disputed"], ["Cleared", "Cleared"]].map(function (x) {
       return '<label><input type="radio" name="mk-status" value="' + x[0] + '"' + (mk.status === x[0] ? ' checked' : '') + '><span>' + x[1] + '</span></label>';
     }).join("");
     w.innerHTML = '<div class="scrim" data-act="close"><form class="sheet" id="markform" role="dialog" aria-modal="true" aria-labelledby="mark-title">' +
@@ -883,11 +874,11 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<option value="">Pick a player</option>' + players.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === mk.playerId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
       '<div class="field"><label class="flabel" for="mk-date">Date</label><input type="date" id="mk-date" value="' + esc(mk.date) + '" max="' + esc(S.today || '') + '"></div>' +
       '<div class="field"><span class="flabel">Reason</span><div class="picker" role="radiogroup" aria-label="Reason">' + reasons + '</div></div>' +
-      '<div class="field"><label class="flabel" for="mk-session">Session (optional)</label><select id="mk-session"><option value="">Not linked to a session</option>' +
+      '<div class="field"><label class="flabel" for="mk-session">Session</label><select id="mk-session"><option value="">None</option>' +
       choices.map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.key === mk.sessionKey ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join("") + '</select></div>' +
       '<div class="field"><label class="flabel" for="mk-note">Note</label><input type="text" id="mk-note" maxlength="200" value="' + esc(mk.note) + '" placeholder="e.g. 10 minutes late"></div>' +
       '<div class="field"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' + statuses + '</div>' +
-      '<input type="text" id="mk-snote" maxlength="200" value="' + esc(mk.statusNote) + '" placeholder="e.g. Emailed the club manager on 21 Nov" aria-label="Status note"></div>' +
+      '<input type="text" id="mk-snote" maxlength="200" value="' + esc(mk.statusNote) + '" placeholder="Status note, e.g. emailed the manager" aria-label="Status note"></div>' +
       '<p id="mkpreview" class="preview" aria-live="polite"></p>' +
       '<div class="actions">' + (mk.id ? (mk.confirmDelete
         ? '<span class="confirm">Delete this black mark?</span><button type="button" class="btn danger" data-act="mark-delete-yes">Delete</button><button type="button" class="btn" data-act="mark-delete-no">Keep</button>'
@@ -989,17 +980,17 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
     $("st-Provisional").checked = ed.status === "Provisional";
     $("st-Confirmed").checked = ed.status === "Confirmed";
     var at = localStart(ed.date, ed.start), dl = at - CFG.confirmHours * HOUR;
-    if (opps) hint.textContent = "Confirmed: players named.";
-    else if (ed.status === "Confirmed") hint.textContent = ed.id ? "Confirmed without players named." : dl <= nowMs() ? "Made inside " + CFG.confirmHours + " hours of the booking, so it starts as confirmed." : "Confirmed without players named.";
-    else if (at <= nowMs()) hint.textContent = "This booking has started.";
-    else if (dl <= nowMs()) hint.textContent = "Past the " + when(dl) + " deadline: the club may have cancelled it. Check the club system.";
-    else hint.textContent = "Name players by " + when(dl) + ", or the club cancels it.";
+    if (opps) hint.textContent = "";
+    else if (ed.status === "Confirmed") hint.textContent = "";
+    else if (at <= nowMs()) hint.textContent = "";
+    else if (dl <= nowMs()) hint.textContent = "May have been cancelled";
+    else hint.textContent = "Name players by " + when(dl);
     $("statushint-wrap").hidden = false;
 
     // For information only: bans never stop a booking being recorded.
     var bb = ed.bookerId && banOn(ed.bookerId, ed.date);
     var bw = $("banwarn");
-    bw.textContent = bb ? pname(ed.bookerId) + " has a ban recorded on this date (free to book from " + fmt(bb.freeFrom) + ")." : "";
+    bw.textContent = bb ? pname(ed.bookerId) + " banned (free " + fmt(bb.freeFrom) + ")" : "";
     bw.hidden = !bb;
   }
   function playerOptions(selected, blank) {
@@ -1021,7 +1012,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       ? '<div class="picker" role="radiogroup" aria-label="Booked by">' + bookers.map(function (p) {
           return '<label><input type="radio" name="who" value="' + esc(p.id) + '"' + (ed.bookerId === p.id ? ' checked' : '') + '><span>' + esc(p.name) + '</span></label>';
         }).join("") + '</div>'
-      : '<p class="empty">No bookers yet. <button type="button" class="linklike" data-act="go-players">Tick Booker on the Players list</button> first.</p>';
+      : '<p class="empty">No bookers. <button type="button" class="linklike" data-act="go-players">Players</button></p>';
     var starts = startOptions(s, ed.start).map(function (t) {
       return '<option value="' + t + '"' + (t === ed.start ? ' selected' : '') + '>' + hm(t) + '</option>';
     }).join("");
@@ -1042,8 +1033,7 @@ select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; b
       '<div class="field"><span class="flabel">Booked by</span>' + picker + '</div>' +
       '<div class="timerow"><div class="field"><label class="flabel" for="start">Start</label><select id="start">' + starts + '</select></div>' +
       '<div class="field"><span class="flabel">Length</span><div class="picker" role="radiogroup" aria-label="Length">' + lenPicker + '</div></div></div>' +
-      '<div class="field"><span class="flabel">Players</span><div class="opps">' + opps + '</div>' +
-      '<p class="hint">Up to 3 besides the booker, from the Players list. You don’t need to name everyone: one player confirms the booking. Missing someone? Add them on the Players tab.</p></div>' +
+      '<div class="field"><span class="flabel">Players</span><div class="opps">' + opps + '</div></div>' +
       '<div class="field statusbox"><div id="statusfield"><span class="flabel">Status</span><div class="picker" role="radiogroup" aria-label="Status">' +
       '<label><input type="radio" name="status" id="st-Provisional" value="Provisional"><span>Provisional</span></label>' +
       '<label><input type="radio" name="status" id="st-Confirmed" value="Confirmed"><span>Confirmed</span></label></div></div>' +
