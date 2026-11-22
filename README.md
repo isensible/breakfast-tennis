@@ -129,15 +129,23 @@ After editing, use **Deploy → Manage deployments → Edit (pencil) → Version
 
 The app no longer uses an **Attendance** tab. If your sheet has one from an earlier version, it's left alone; delete it whenever you like.
 
-### Upgrading from the version with a Bookers tab
+### Upgrading a sheet set up with an earlier version (Bookers tab)
 
-The first time anyone loads the new version, the sheet is converted automatically:
+The first time the new version runs, it converts the sheet once:
 
-- Everyone on the **Bookers** tab becomes a player with Booker ticked, and every opponent name on existing bookings becomes a player.
-- The **Bookings** tab is rebuilt in the new layout. The old one is kept as **Bookings (before players)**. Bookings that had an opponent become Confirmed; those without become Provisional.
-- The old **Bookers** tab is no longer used. Delete it, and the backup, once you're happy.
+- Everyone on **Bookers** becomes a player with Booker ticked.
+- **Bookings** is rebuilt in the new layout and the old tab is kept as **Bookings (before players)**. Bookings from a sheet without an Opponent column come across as **Confirmed** (they were never provisional). Rows without an ID get one.
+- New tabs are added: **Players**, **Black marks**, **Sign-ups**. New Settings rows are optional; missing ones use their defaults.
+- Nothing else is changed. If a tab you already have shares a name with one the app needs (for example your own "Players"), the app stops and asks you to rename it, rather than writing into it.
 
-An older **Settings** tab keeps working.
+Safe way to upgrade:
+
+1. **Back up:** in the spreadsheet, **File → Make a copy**. The copy includes the script.
+2. **Rehearse on the copy (recommended):** in the copy, **Extensions → Apps Script**, paste the new `Code.gs` and `Index.html`, choose `setup` and **Run**. Then **Deploy → Test deployments → Web app** and open the URL. Check the bookings, Players list and Settings look right.
+3. **Upgrade the real sheet:** paste the same code into the real sheet's Apps Script, **Run** `setup`, check it, then **Deploy → Manage deployments → Edit → Version: New version → Deploy**. The link stays the same.
+4. **Tidy up:** check the Players list for duplicates or nicknames and rename where needed; set **Free to book from** for anyone banned. Delete **Bookers** and **Bookings (before players)** once you're happy.
+
+If anything looks wrong, the copy from step 1 has everything as it was.
 
 ## Editing the sheet by hand
 

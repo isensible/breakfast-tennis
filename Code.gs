@@ -622,10 +622,14 @@ function migrate_(layout) {
 
   // Convert the previous Bookings layout (… | Booker | Updated | Updated by | ID | Opponent).
   const rows = [];
+  let hadOpponentColumn = false;
   if (layout === 'v2') {
     const sh = ss.getSheetByName(BOOKINGS);
     const n = sh.getLastRow() - 1;
     const vals = n > 0 ? sh.getRange(2, 1, n, 10).getDisplayValues() : [];
+    // Sheets from before provisional bookings existed have no Opponent column: those bookings were
+    // simply bookings, so they come across as Confirmed. With the column, no opponent meant provisional.
+    hadOpponentColumn = String(sh.getRange(1, 10).getDisplayValue()).trim().toLowerCase() === 'opponent';
     vals.forEach(r => {
       const date = normDate_(r[0]), start = time_(r[2]);
       let minutes = Number(r[4]);
@@ -653,7 +657,7 @@ function migrate_(layout) {
     const byId = indexBy_(players, 'id');
     bsh.getRange(2, 1, rows.length, BOOKINGS_HEADER.length).setValues(rows.map(x => [
       x.date, x.court, x.start, fromMin_(toMin_(x.start) + x.minutes), x.minutes,
-      x.opps.length ? CONFIRMED : PROVISIONAL, x.bookerId, x.opps.join(', '),
+      x.opps.length || !hadOpponentColumn ? CONFIRMED : PROVISIONAL, x.bookerId, x.opps.join(', '),
       nameOf_(byId, x.bookerId), x.opps.map(p => nameOf_(byId, p)).join(', '), x.updated, x.by, x.id]));
   }
 }
@@ -809,6 +813,18 @@ function validateDateCourt_(config, date, court) {
 function sheet_(name, header) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(name);
+  if (sh) {
+    // A tab with this name already exists. Use it only if it's the app's (its first two headings match,
+    // or it's empty); otherwise stop rather than write into someone else's tab.
+    const top = sh.getRange(1, 1, 1, 2).getDisplayValues()[0].map(v => String(v).trim().toLowerCase());
+    if (!top[0] && !top[1] && sh.getLastRow() <= 1) {
+      sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+      sh.setFrozenRows(1);
+    } else if (top[0] !== header[0].toLowerCase() || top[1] !== header[1].toLowerCase()) {
+      throw new Error('This spreadsheet already has a tab called "' + name + '" that isn’t the app’s (its first headings aren’t "' +
+        header[0] + '" and "' + header[1] + '"). Rename that tab, then reload; the app will create its own.');
+    }
+  }
   if (!sh) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
